@@ -76,8 +76,10 @@
 
         const mins = Math.floor(s.clock.time_ms / 60000);
         const secs = Math.floor((s.clock.time_ms % 60000) / 1000);
-        document.getElementById('clock').textContent =
-          (s.clock.running ? '> ' : '|| ') + mins + ':' + String(secs).padStart(2, '0');
+        const clockEl = document.getElementById('clock');
+        clockEl.textContent = mins + ':' + String(secs).padStart(2, '0');
+        clockEl.classList.toggle('clock-running', s.clock.running);
+        clockEl.classList.toggle('clock-stopped', !s.clock.running);
 
         setLamp('leftOnTarget', s.left.on_target, 'on-left');
         setLamp('rightOnTarget', s.right.on_target, 'on-right');

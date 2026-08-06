@@ -109,6 +109,8 @@ section {
   font-size: 36px;
   margin: 0 12px;
 }
+.scoreboard .clock.clock-running { color: #2ecc40; }
+.scoreboard .clock.clock-stopped { color: #f44336; }
 .scoreboard .lamp {
   width: 24px;
   height: 24px;
