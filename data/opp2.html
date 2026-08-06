@@ -150,6 +150,7 @@
     }
 
     async function action(url) {
+      if (navigator.vibrate) navigator.vibrate(100);
       document.getElementById('statusLine').textContent = 'Sending ' + url + '...';
       try {
         await fetch(url);

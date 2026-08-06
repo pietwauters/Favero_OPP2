@@ -63,6 +63,7 @@
     }
 
     async function saveSettings() {
+      if (navigator.vibrate) navigator.vibrate(100);
       const pisteId = encodeURIComponent(document.getElementById('pisteId').value);
       const mqttBroker = encodeURIComponent(document.getElementById('mqttBroker').value);
       const mqttPort = encodeURIComponent(document.getElementById('mqttPort').value);
@@ -73,6 +74,7 @@
 
     function resetWifi() {
       if (!confirm('Reboot into WiFi setup mode? You will need to reconnect to the Favero_OPP2-setup network.')) return;
+      if (navigator.vibrate) navigator.vibrate(100);
       fetch('/api/wifi/reset');
       document.getElementById('statusLine').textContent = 'Rebooting into setup mode...';
     }
