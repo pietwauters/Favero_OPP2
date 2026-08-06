@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Favero_OPP2 — Bout</title>
+  <meta name="viewport" content="height=device-height, initial-scale=1">
+  <meta name="mobile-web-app-capable" content="yes">
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" type="text/css" href="style.css">
+</head>
+<body>
+
+  <nav>
+    <a href="/">Remote</a>
+    <a href="/opp2.html" class="active">OPP2</a>
+    <a href="/settings.html">Settings</a>
+  </nav>
+
+  <div class="panel">
+
+    <div class="scoreboard">
+      <div class="side">
+        <div id="leftScore" class="score">--</div>
+        <div>
+          <span id="leftOnTarget" class="lamp"></span>
+          <span id="leftWhite" class="lamp"></span>
+          <span id="leftYellow" class="lamp card">Y</span>
+          <span id="leftRed" class="lamp card">R</span>
+          <span id="leftPrio">&nbsp;</span>
+        </div>
+      </div>
+      <div id="clock" class="clock">-:--</div>
+      <div class="side">
+        <div id="rightScore" class="score">--</div>
+        <div>
+          <span id="rightPrio">&nbsp;</span>
+          <span id="rightYellow" class="lamp card">Y</span>
+          <span id="rightRed" class="lamp card">R</span>
+          <span id="rightWhite" class="lamp"></span>
+          <span id="rightOnTarget" class="lamp"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="status-line">
+      State: <span id="apparatusState">--</span> &nbsp;|&nbsp;
+      Match #<span id="matchNum">--</span> &nbsp;|&nbsp;
+      Weapon: <span id="weapon">--</span>
+    </div>
+
+    <h3>Lifecycle</h3>
+    <div class="actionbar">
+      <button onclick="action('/Opp2Prev')">&laquo; Prev</button>
+      <button onclick="action('/Opp2Begin')">Begin</button>
+      <button onclick="action('/Opp2Next')">Next &raquo;</button>
+    </div>
+    <div class="actionbar">
+      <button onclick="action('/Opp2Halt')" class="warn">Halt</button>
+      <button onclick="action('/Opp2Pause')" class="warn">Pause</button>
+      <button onclick="action('/Opp2End')" class="danger">End</button>
+    </div>
+
+    <h3>Weapon</h3>
+    <div class="actionbar">
+      <button onclick="action('/Opp2SetWeapon?weapon=F')">Foil</button>
+      <button onclick="action('/Opp2SetWeapon?weapon=E')">Epee</button>
+      <button onclick="action('/Opp2SetWeapon?weapon=S')">Sabre</button>
+    </div>
+
+    <h3>Fencers</h3>
+    <p style="text-align:left;">
+      Current: <span id="leftCurrent">--</span> vs <span id="rightCurrent">--</span>
+    </p>
+    <div class="form-row">
+      <label for="leftName">Left name</label>
+      <input id="leftName" type="text" maxlength="63">
+    </div>
+    <div class="form-row">
+      <label for="leftNoc">Left NOC</label>
+      <input id="leftNoc" type="text" maxlength="3" style="text-transform:uppercase">
+    </div>
+    <div class="form-row">
+      <label for="rightName">Right name</label>
+      <input id="rightName" type="text" maxlength="63">
+    </div>
+    <div class="form-row">
+      <label for="rightNoc">Right NOC</label>
+      <input id="rightNoc" type="text" maxlength="3" style="text-transform:uppercase">
+    </div>
+    <div class="actionbar">
+      <button onclick="setFencers()">Set fencers</button>
+    </div>
+
+    <div id="statusLine" class="status-line"></div>
+  </div>
+
+  <script>
+    const APPARATUS_STATE = ["Fencing", "Halt", "Pause", "Waiting", "Ending", "Unknown"];
+    const WEAPON = ["Foil", "Epee", "Sabre", "Unknown"];
+    const PRIORITY = ["", ">", "<", ""]; // NONE, RIGHT, LEFT, UNKNOWN
+
+    function setLamp(id, on, cls) {
+      const el = document.getElementById(id);
+      el.classList.toggle(cls, !!on);
+    }
+
+    async function poll() {
+      try {
+        const res = await fetch('/api/state', { cache: 'no-store' });
+        const s = await res.json();
+
+        document.getElementById('leftScore').textContent = s.left.score;
+        document.getElementById('rightScore').textContent = s.right.score;
+
+        const mins = Math.floor(s.clock.time_ms / 60000);
+        const secs = Math.floor((s.clock.time_ms % 60000) / 1000);
+        document.getElementById('clock').textContent =
+          (s.clock.running ? '> ' : '|| ') + mins + ':' + String(secs).padStart(2, '0');
+
+        setLamp('leftOnTarget', s.left.on_target, 'on-left');
+        setLamp('rightOnTarget', s.right.on_target, 'on-right');
+        setLamp('leftWhite', s.left.white, 'white-on');
+        setLamp('rightWhite', s.right.white, 'white-on');
+        setLamp('leftYellow', s.left.yellow_card, 'on-yellow');
+        setLamp('rightYellow', s.right.yellow_card, 'on-yellow');
+        setLamp('leftRed', s.left.red_card, 'on-red');
+        setLamp('rightRed', s.right.red_card, 'on-red');
+
+        document.getElementById('leftPrio').textContent = PRIORITY[s.priority] === '<' ? PRIORITY[s.priority] : '';
+        document.getElementById('rightPrio').textContent = PRIORITY[s.priority] === '>' ? PRIORITY[s.priority] : '';
+
+        document.getElementById('apparatusState').textContent = APPARATUS_STATE[s.apparatus_state] || '?';
+        document.getElementById('matchNum').textContent = s.match_num;
+        document.getElementById('weapon').textContent = WEAPON[s.weapon] || '?';
+
+        document.getElementById('leftCurrent').textContent =
+          s.left.name ? (s.left.name + (s.left.noc ? ' (' + s.left.noc + ')' : '')) : '--';
+        document.getElementById('rightCurrent').textContent =
+          s.right.name ? (s.right.name + (s.right.noc ? ' (' + s.right.noc + ')' : '')) : '--';
+
+        if (!document.activeElement || document.activeElement.tagName !== 'INPUT') {
+          document.getElementById('leftName').placeholder = s.left.name || 'Left fencer';
+          document.getElementById('rightName').placeholder = s.right.name || 'Right fencer';
+          document.getElementById('leftNoc').placeholder = s.left.noc || 'NOC';
+          document.getElementById('rightNoc').placeholder = s.right.noc || 'NOC';
+        }
+      } catch (e) {
+        document.getElementById('statusLine').textContent = 'Connection lost, retrying...';
+      }
+    }
+
+    async function action(url) {
+      document.getElementById('statusLine').textContent = 'Sending ' + url + '...';
+      try {
+        await fetch(url);
+        document.getElementById('statusLine').textContent = '';
+        poll();
+      } catch (e) {
+        document.getElementById('statusLine').textContent = 'Failed: ' + url;
+      }
+    }
+
+    function setFencers() {
+      const l = encodeURIComponent(document.getElementById('leftName').value);
+      const ln = encodeURIComponent(document.getElementById('leftNoc').value);
+      const r = encodeURIComponent(document.getElementById('rightName').value);
+      const rn = encodeURIComponent(document.getElementById('rightNoc').value);
+      action(`/Opp2SetFencer?side=L&name=${l}&noc=${ln}`);
+      setTimeout(() => action(`/Opp2SetFencer?side=R&name=${r}&noc=${rn}`), 300);
+    }
+
+    setInterval(poll, 500);
+    poll();
+  </script>
+
+</body>
+</html>

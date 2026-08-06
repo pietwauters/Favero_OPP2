@@ -1,0 +1,168 @@
+html {
+  font-family: Helvetica;
+  display: inline-block;
+  margin: 0px auto;
+  text-align: center;
+  background-color: black;
+  color: white;
+}
+
+h1 {
+  color: #0F3376;
+  padding: 2vh;
+}
+p {
+  font-size: 24px;
+}
+
+nav {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px;
+  background-color: #111;
+}
+nav a {
+  color: white;
+  text-decoration: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  background-color: #333;
+  font-size: 16px;
+}
+nav a.active {
+  background-color: #008CBA;
+}
+
+.grid-container {
+  display: grid;
+  grid-template-columns: auto auto auto;
+  background-color: black;
+  padding: 5px;
+}
+
+.button {
+  display: inline-block;
+  background-color: #008CBA;
+  border: none;
+  border-radius: 50%;
+  color: white;
+  padding: 5px 5px;
+  text-decoration: none;
+  font-size: 14px;
+  margin: 1px;
+  cursor: pointer;
+  height: 70px;
+  width: 70px;
+}
+.buttonred {
+  background-color: #f44336;
+}
+.buttonredshorttext {
+  background-color: #f44336;
+  font-size: 48px;
+}
+.buttongreen {
+  background-color: green;
+}
+.buttonyellow {
+  background-color: yellow;
+  color: black;
+}
+.buttoncard {
+  border-radius: 10%;
+  height: 44px;
+  margin-top: 13px;
+  margin-bottom: 13px;
+}
+
+section {
+  display: flex;
+  width: 101vw;
+}
+
+/* ── OPP2 / Settings pages ────────────────────────────────────────────── */
+
+.panel {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 12px;
+}
+
+.scoreboard {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #111;
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+.scoreboard .side {
+  flex: 1;
+}
+.scoreboard .score {
+  font-size: 64px;
+  font-weight: bold;
+}
+.scoreboard .clock {
+  font-size: 36px;
+  margin: 0 12px;
+}
+.scoreboard .lamp {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: inline-block;
+  margin: 2px;
+  background-color: #333;
+}
+.scoreboard .lamp.on-left { background-color: red; }
+.scoreboard .lamp.on-right { background-color: #2ecc40; }
+.scoreboard .lamp.white-on { background-color: white; }
+.scoreboard .card.on-yellow { background-color: yellow; color: black; }
+.scoreboard .card.on-red { background-color: #f44336; }
+
+.form-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 10px 0;
+  gap: 8px;
+}
+.form-row label { flex: 0 0 40%; text-align: left; }
+.form-row input, .form-row select {
+  flex: 1;
+  padding: 6px;
+  font-size: 16px;
+}
+
+.actionbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin: 16px 0;
+}
+.actionbar button {
+  padding: 12px 18px;
+  font-size: 16px;
+  border: none;
+  border-radius: 6px;
+  background-color: #008CBA;
+  color: white;
+  cursor: pointer;
+}
+.actionbar button.danger { background-color: #f44336; }
+.actionbar button.warn { background-color: #e0a800; color: black; }
+
+.status-line {
+  font-size: 14px;
+  color: #aaa;
+  min-height: 20px;
+}
+
+@media only screen and (max-width: 600px) {
+  section { align-items: center !important; }
+  h1 { padding-top: 0 !important; }
+}

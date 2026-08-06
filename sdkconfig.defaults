@@ -1,0 +1,8 @@
+CONFIG_FREERTOS_HZ=1000
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_MDNS_ENABLED=y
+; The `main` task (running setup()/loop() via our app_main()) blocks for
+; long stretches during WiFiManager's portal/connect flow without yielding
+; enough to satisfy the idle-task watchdog on CPU0 -- same class of issue
+; esp32scoringdeviceMqtt hit with its own busy core, fixed the same way.
+CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0=n
