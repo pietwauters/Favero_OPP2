@@ -156,7 +156,7 @@ section {
   cursor: pointer;
 }
 .actionbar button.danger { background-color: #f44336; }
-.actionbar button.warn { background-color: #e0a800; color: black; }
+.actionbar button:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .status-line {
   font-size: 14px;

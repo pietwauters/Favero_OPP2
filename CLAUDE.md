@@ -184,6 +184,27 @@ fail checksum validation once GPIO13 is wired to a live Favero.
   `software/<piste>/control` at all — this bridge's half is now correct,
   but a CMS that doesn't answer control-END will still hang forever by
   design (that's the point of an ACK protocol).
+- **Halt/Pause are reported facts, not user commands — no manual buttons
+  for them.** `/Opp2Halt` and `/Opp2Pause` (and their opp2.html buttons)
+  were removed entirely (2026-08-06), not just left as local-only actions.
+  Reason: `updateFromFavero()` already derives Fencing/Halt from the
+  Favero's real chrono-running bit whenever current state is Fencing or
+  Halt, so a manual Halt press was always transient — the next telemetry
+  frame silently flips it back the moment the real clock disagrees.
+  Pause had no telemetry counterpart at all, but the explicit decision
+  here is that this bridge should reflect what the real apparatus is
+  doing, not let an operator inject a lifecycle state that isn't backed
+  by reality. Don't re-add either as a manual control.
+- **Lifecycle transitions are rejected outright while the clock is
+  running.** `addGuardedOpp2Route()` (`main.cpp`) 409s Prev/Begin/Next/End
+  whenever `g_opp2.state().clock.running` is true — a bout is live, so no
+  lifecycle transition makes sense until the referee/apparatus actually
+  stops the clock. opp2.html mirrors this client-side too (disables the
+  four lifecycle buttons and shows a warning while running), but the
+  server-side 409 is the actual guarantee; the client-side disabling is
+  just so a stray click doesn't even need a round-trip to be told no.
+  Weapon selection and fencer entry are deliberately NOT gated by this —
+  they're metadata edits, not lifecycle transitions.
 - **`handleSoftwareMatch`/`handleSoftwareFencers` relay onward** under
   `apparatus/match` + `apparatus/fencers` (not just update local state).
   Reason: other devices on a piste (displays, repeaters) are expected to
@@ -218,6 +239,8 @@ spending long on first-principles debugging.
 - No MQTT broker auth/TLS (the real broker this was tested against is
   anonymous-reachable on port 1883 for at least `apparatus/*`).
 - No OTA (traded away for the larger app partition — see above).
-- Begin/Halt/Pause remain purely local UI state. End now does a proper
-  CMS round-trip (see "Protocol boundaries" below) — Next/Prev/End are the
+- Begin remains purely local UI state. End now does a proper CMS
+  round-trip (see "Protocol boundaries" below) — Next/Prev/End are the
   three lifecycle actions that leave local state and wait on the CMS.
+  Halt/Pause were removed entirely as manual buttons — see "Protocol
+  boundaries" below.

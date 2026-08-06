@@ -26,15 +26,16 @@
     </div>
 
     <h3>Lifecycle</h3>
+    <p id="timerWarning" class="status-line" style="display:none;color:#f44336;">
+      Timer is running -- stop it to change match state
+    </p>
     <div class="actionbar">
-      <button onclick="action('/Opp2Prev')">&laquo; Prev</button>
-      <button onclick="action('/Opp2Begin')">Begin</button>
-      <button onclick="action('/Opp2Next')">Next &raquo;</button>
+      <button id="btnPrev" class="lifecycle-btn" onclick="action('/Opp2Prev')">&laquo; Prev</button>
+      <button id="btnBegin" class="lifecycle-btn" onclick="action('/Opp2Begin')">Begin</button>
+      <button id="btnNext" class="lifecycle-btn" onclick="action('/Opp2Next')">Next &raquo;</button>
     </div>
     <div class="actionbar">
-      <button onclick="action('/Opp2Halt')" class="warn">Halt</button>
-      <button onclick="action('/Opp2Pause')" class="warn">Pause</button>
-      <button onclick="action('/Opp2End')" class="danger">End</button>
+      <button id="btnEnd" class="lifecycle-btn danger" onclick="action('/Opp2End')">End</button>
     </div>
 
     <h3>Weapon</h3>
@@ -84,6 +85,11 @@
         document.getElementById('matchNum').textContent = s.match_num;
         document.getElementById('weapon').textContent = WEAPON[s.weapon] || '?';
 
+        document.getElementById('timerWarning').style.display = s.clock.running ? 'block' : 'none';
+        document.querySelectorAll('.lifecycle-btn').forEach(function (btn) {
+          btn.disabled = s.clock.running;
+        });
+
         document.getElementById('leftCurrent').textContent =
           s.left.name ? (s.left.name + (s.left.noc ? ' (' + s.left.noc + ')' : '')) : '--';
         document.getElementById('rightCurrent').textContent =
@@ -104,8 +110,9 @@
       if (navigator.vibrate) navigator.vibrate(100);
       document.getElementById('statusLine').textContent = 'Sending ' + url + '...';
       try {
-        await fetch(url);
-        document.getElementById('statusLine').textContent = '';
+        const res = await fetch(url);
+        const text = await res.text();
+        document.getElementById('statusLine').textContent = res.ok ? '' : text;
         poll();
       } catch (e) {
         document.getElementById('statusLine').textContent = 'Failed: ' + url;

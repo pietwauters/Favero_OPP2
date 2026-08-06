@@ -190,6 +190,26 @@ void addOpp2Route(const char* path,
     });
 }
 
+// For lifecycle transitions only (Prev/Begin/Next/End): while the Favero's
+// clock is actually running, a bout is live and no lifecycle transition
+// makes sense -- rejected with 409 rather than silently applied, since
+// Halt/Pause used to be exposed as separate manual buttons for exactly
+// this kind of "the real state disagrees with what's requested" case, and
+// removing them (see main.cpp history) means this guard is now the only
+// thing standing between a stray click and a nonsense mid-bout state
+// change. 409 body is shown to the user by opp2.html's action().
+void addGuardedOpp2Route(const char* path,
+                          const std::function<void(AsyncWebServerRequest*)>& action) {
+    g_server.on(path, HTTP_GET, [action](AsyncWebServerRequest* request) {
+        if (g_opp2.state().clock.running) {
+            request->send(409, "text/plain", "Timer is running -- stop it first");
+            return;
+        }
+        action(request);
+        request->send(200, "text/plain", "OK");
+    });
+}
+
 OPP2::Weapon parseWeapon(const String& s) {
     if (s == "F") return OPP2::Weapon::FOIL;
     if (s == "E") return OPP2::Weapon::EPEE;
@@ -221,19 +241,19 @@ void setupWebServer() {
     addFaveroIrRoute("/FaveroTeleAq", []() { g_faveroIr.teleAq(); });
 
     // OPP2 lifecycle -- local only, never touches IR (Favero has no
-    // concept of match identity or lifecycle at all).
-    addOpp2Route("/Opp2Next", [](AsyncWebServerRequest*) { g_opp2.nextMatch(); });
-    addOpp2Route("/Opp2Prev", [](AsyncWebServerRequest*) { g_opp2.prevMatch(); });
-    addOpp2Route("/Opp2Begin", [](AsyncWebServerRequest*) {
+    // concept of match identity or lifecycle at all). Halt/Pause used to
+    // be separate manual buttons here, but both are facts the Favero's
+    // own telemetry reports (chrono running/not running), not choices a
+    // human should inject from this UI -- see updateFromFavero(), which
+    // already derives Fencing/Halt from the real clock and would just
+    // fight a manual Halt/Pause press on the next telemetry frame anyway.
+    // Removed rather than kept as dead buttons.
+    addGuardedOpp2Route("/Opp2Next", [](AsyncWebServerRequest*) { g_opp2.nextMatch(); });
+    addGuardedOpp2Route("/Opp2Prev", [](AsyncWebServerRequest*) { g_opp2.prevMatch(); });
+    addGuardedOpp2Route("/Opp2Begin", [](AsyncWebServerRequest*) {
         g_opp2.setApparatusState(OPP2::ApparatusState::HALT);
     });
-    addOpp2Route("/Opp2Halt", [](AsyncWebServerRequest*) {
-        g_opp2.setApparatusState(OPP2::ApparatusState::HALT);
-    });
-    addOpp2Route("/Opp2Pause", [](AsyncWebServerRequest*) {
-        g_opp2.setApparatusState(OPP2::ApparatusState::PAUSE);
-    });
-    addOpp2Route("/Opp2End", [](AsyncWebServerRequest*) { g_opp2.endMatch(); });
+    addGuardedOpp2Route("/Opp2End", [](AsyncWebServerRequest*) { g_opp2.endMatch(); });
     addOpp2Route("/Opp2SetWeapon", [](AsyncWebServerRequest* request) {
         if (request->hasParam("weapon")) {
             g_opp2.setWeapon(parseWeapon(request->getParam("weapon")->value()));
