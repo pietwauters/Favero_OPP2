@@ -85,15 +85,14 @@ pio run -e esp32dev -t uploadfs   # upload data/ (web UI) to SPIFFS
 pio test -e native
 ```
 
-### Before your first build
+### Dependencies
 
-One `lib_deps` entry in `platformio.ini` currently points at a local path
-(`file:///home/piet/Arduinoprojects/libraries/IRremoteESP8266`) rather than
-a public URL — point this at your own local checkout of
-[IRremoteESP8266](https://github.com/crankyoldgit/IRremoteESP8266) (or a
-fork/tag of it) before building. Every other dependency (`opp2-library`,
-`ArduinoJson`, `AsyncTCP`/`ESPAsyncWebServer`, `WiFiManager`) resolves
-directly from `lib_deps`.
+All `lib_deps` resolve directly from public URLs — no local checkouts
+needed. One is not upstream `crankyoldgit/IRremoteESP8266` but
+[`pietwauters/IRremoteESP8266`](https://github.com/pietwauters/IRremoteESP8266)
+(branch `favero-fa05`, pinned to a commit): a fork with Favero FA-05 IR
+protocol support (`sendFavero`/`decodeFavero`) added on top of upstream
+`v2.8.6`, since that protocol isn't (and likely won't be) part of upstream.
 
 This project relies on several toolchain-specific fixes (task stack sizes,
 partition layout, filesystem choice, exact library forks) that took real
