@@ -17,6 +17,7 @@ p {
 
 nav {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
   gap: 8px;
   padding: 10px;
@@ -32,6 +33,19 @@ nav a {
 }
 nav a.active {
   background-color: #008CBA;
+}
+nav button.fullscreen-btn {
+  color: white;
+  background-color: #333;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.view {
+  display: none;
 }
 
 .grid-container {

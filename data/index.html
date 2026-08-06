@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Favero_OPP2 — Remote</title>
+  <title>Favero_OPP2</title>
   <meta name="viewport" content="height=device-height, initial-scale=1">
   <meta name="mobile-web-app-capable" content="yes">
   <link rel="icon" href="data:,">
@@ -11,47 +11,348 @@
 <body>
 
   <nav>
-    <a href="/" class="active">Remote</a>
-    <a href="/repeater.html">Repeater</a>
-    <a href="/opp2.html">OPP2</a>
-    <a href="/settings.html">Settings</a>
+    <a href="#remote" data-view="remote">Remote</a>
+    <a href="#repeater" data-view="repeater">Repeater</a>
+    <a href="#opp2" data-view="opp2">OPP2</a>
+    <a href="#settings" data-view="settings">Settings</a>
+    <button id="btnFullscreen" class="fullscreen-btn">Fullscreen</button>
   </nav>
 
-  <div class="grid-container">
-  <div class="grid-item"><a href="/FaveroStartStop"><button class="button buttongreen">Start<br/>Stop</button></a></div>
-  <div class="grid-item"><a href="/FaveroRearm"><button class="button buttonyellow">Rearm</button></a></div>
-  <div class="grid-item"><a href="/FaveroPause"><button class="button buttongreen">Pause<br/>1min</button></a></div>
+  <section id="view-remote" class="view">
+    <div class="grid-container">
+    <div class="grid-item"><button class="button buttongreen" onclick="faveroAction('/FaveroStartStop')">Start<br/>Stop</button></div>
+    <div class="grid-item"><button class="button buttonyellow" onclick="faveroAction('/FaveroRearm')">Rearm</button></div>
+    <div class="grid-item"><button class="button buttongreen" onclick="faveroAction('/FaveroPause')">Pause<br/>1min</button></div>
 
-  <div class="grid-item"><a href="/FaveroPlusLeft"><button class="button buttonredshorttext">+</button></a></div>
-  <div class="grid-item"><a href="/FaveroReset"><button class="button buttonred">Mise <br/>a zero</button></a></div>
-  <div class="grid-item"><a href="/FaveroPlusRight"><button class="button buttonredshorttext">+</button></a></div>
+    <div class="grid-item"><button class="button buttonredshorttext" onclick="faveroAction('/FaveroPlusLeft')">+</button></div>
+    <div class="grid-item"><button class="button buttonred" onclick="faveroAction('/FaveroReset')">Mise <br/>a zero</button></div>
+    <div class="grid-item"><button class="button buttonredshorttext" onclick="faveroAction('/FaveroPlusRight')">+</button></div>
 
-  <div class="grid-item"><a href="/FaveroRedLeft"><button class="button buttonred buttoncard">Red<br/>Card</button></a></div>
-  <div class="grid-item"><a href="/FaveroSet"><button class="button buttongreen">Set </button></a></div>
-  <div class="grid-item"><a href="/FaveroRedRight"><button class="button buttonred buttoncard">Red<br/>Card</button></a></div>
+    <div class="grid-item"><button class="button buttonred buttoncard" onclick="faveroAction('/FaveroRedLeft')">Red<br/>Card</button></div>
+    <div class="grid-item"><button class="button buttongreen" onclick="faveroAction('/FaveroSet')">Set </button></div>
+    <div class="grid-item"><button class="button buttonred buttoncard" onclick="faveroAction('/FaveroRedRight')">Red<br/>Card</button></div>
 
-  <div class="grid-item"><a href="/FaveroYellowLeft"><button class="button buttonyellow buttoncard">Yellow<br/>Card</button></a></div>
-  <div class="grid-item"><a href="/FaveroMatchCount"><button class="button">Match<br/>Count</button></a></div>
-  <div class="grid-item"><a href="/FaveroYellowRight"><button class="button buttonyellow buttoncard">Yellow<br/>Card</button></a></div>
+    <div class="grid-item"><button class="button buttonyellow buttoncard" onclick="faveroAction('/FaveroYellowLeft')">Yellow<br/>Card</button></div>
+    <div class="grid-item"><button class="button" onclick="faveroAction('/FaveroMatchCount')">Match<br/>Count</button></div>
+    <div class="grid-item"><button class="button buttonyellow buttoncard" onclick="faveroAction('/FaveroYellowRight')">Yellow<br/>Card</button></div>
 
-  <div class="grid-item"><a href="/FaveroMinusLeft"><button class="button buttonredshorttext">-</button></a></div>
-  <div class="grid-item"><a href="/FaveroPrioMan"><button class="button">Pman</button></a></div>
-  <div class="grid-item"><a href="/FaveroMinusRight"><button class="button buttonredshorttext">-</button></a></div>
+    <div class="grid-item"><button class="button buttonredshorttext" onclick="faveroAction('/FaveroMinusLeft')">-</button></div>
+    <div class="grid-item"><button class="button" onclick="faveroAction('/FaveroPrioMan')">Pman</button></div>
+    <div class="grid-item"><button class="button buttonredshorttext" onclick="faveroAction('/FaveroMinusRight')">-</button></div>
 
-  <div class="grid-item"><a href="/FaveroBlock"><button class="button">Block</button></a></div>
-  <div class="grid-item"><a href="/FaveroPrioCas"><button class="button">Pcas</button></a></div>
-  <div class="grid-item"><a href="/FaveroTeleAq"><button class="button">Telec<br/>Acquis</button></a></div>
-  </div>
+    <div class="grid-item"><button class="button" onclick="faveroAction('/FaveroBlock')">Block</button></div>
+    <div class="grid-item"><button class="button" onclick="faveroAction('/FaveroPrioCas')">Pcas</button></div>
+    <div class="grid-item"><button class="button" onclick="faveroAction('/FaveroTeleAq')">Telec<br/>Acquis</button></div>
+    </div>
+  </section>
+
+  <section id="view-repeater" class="view">
+    <div class="panel">
+
+      <div class="scoreboard">
+        <div class="side">
+          <div id="leftScore" class="score">--</div>
+          <div>
+            <span id="leftOnTarget" class="lamp"></span>
+            <span id="leftWhite" class="lamp"></span>
+            <span id="leftYellow" class="lamp card">Y</span>
+            <span id="leftRed" class="lamp card">R</span>
+            <span id="leftPrio">&nbsp;</span>
+          </div>
+        </div>
+        <div id="clock" class="clock">-:--</div>
+        <div class="side">
+          <div id="rightScore" class="score">--</div>
+          <div>
+            <span id="rightPrio">&nbsp;</span>
+            <span id="rightYellow" class="lamp card">Y</span>
+            <span id="rightRed" class="lamp card">R</span>
+            <span id="rightWhite" class="lamp"></span>
+            <span id="rightOnTarget" class="lamp"></span>
+          </div>
+        </div>
+      </div>
+
+      <p style="text-align:center;">
+        <span class="leftCurrent">--</span> vs <span class="rightCurrent">--</span>
+      </p>
+
+      <div class="status-line">
+        State: <span class="apparatusState">--</span> &nbsp;|&nbsp;
+        Match #<span class="matchNum">--</span> &nbsp;|&nbsp;
+        Weapon: <span class="weapon">--</span>
+      </div>
+
+      <div id="statusLineRepeater" class="status-line"></div>
+    </div>
+  </section>
+
+  <section id="view-opp2" class="view">
+    <div class="panel">
+
+      <div class="status-line">
+        State: <span class="apparatusState">--</span> &nbsp;|&nbsp;
+        Match #<span class="matchNum">--</span> &nbsp;|&nbsp;
+        Weapon: <span class="weapon">--</span>
+      </div>
+
+      <h3>Lifecycle</h3>
+      <p id="timerWarning" class="status-line" style="display:none;color:#f44336;">
+        Timer is running -- stop it to change match state
+      </p>
+      <div class="actionbar">
+        <button id="btnPrev" class="lifecycle-btn" onclick="action('/Opp2Prev')">&laquo; Prev</button>
+        <button id="btnBegin" class="lifecycle-btn" onclick="action('/Opp2Begin')">Begin</button>
+        <button id="btnNext" class="lifecycle-btn" onclick="action('/Opp2Next')">Next &raquo;</button>
+      </div>
+      <div class="actionbar">
+        <button id="btnEnd" class="lifecycle-btn danger" onclick="action('/Opp2End')">End</button>
+      </div>
+
+      <h3>Weapon</h3>
+      <div class="actionbar">
+        <button onclick="action('/Opp2SetWeapon?weapon=F')">Foil</button>
+        <button onclick="action('/Opp2SetWeapon?weapon=E')">Epee</button>
+        <button onclick="action('/Opp2SetWeapon?weapon=S')">Sabre</button>
+      </div>
+
+      <h3>Fencers</h3>
+      <p style="text-align:left;">
+        Current: <span class="leftCurrent">--</span> vs <span class="rightCurrent">--</span>
+      </p>
+      <div class="form-row">
+        <label for="leftName">Left name</label>
+        <input id="leftName" type="text" maxlength="63">
+      </div>
+      <div class="form-row">
+        <label for="leftNoc">Left NOC</label>
+        <input id="leftNoc" type="text" maxlength="3" style="text-transform:uppercase">
+      </div>
+      <div class="form-row">
+        <label for="rightName">Right name</label>
+        <input id="rightName" type="text" maxlength="63">
+      </div>
+      <div class="form-row">
+        <label for="rightNoc">Right NOC</label>
+        <input id="rightNoc" type="text" maxlength="3" style="text-transform:uppercase">
+      </div>
+      <div class="actionbar">
+        <button onclick="setFencers()">Set fencers</button>
+      </div>
+
+      <div id="statusLineOpp2" class="status-line"></div>
+    </div>
+  </section>
+
+  <section id="view-settings" class="view">
+    <div class="panel">
+      <h3>OPP2 / MQTT</h3>
+      <div class="form-row">
+        <label for="pisteId">Piste ID</label>
+        <input id="pisteId" type="text" maxlength="15">
+      </div>
+      <div class="form-row">
+        <label for="mqttBroker">MQTT broker host</label>
+        <input id="mqttBroker" type="text" maxlength="63">
+      </div>
+      <div class="form-row">
+        <label for="mqttPort">MQTT port</label>
+        <input id="mqttPort" type="number" min="1" max="65535">
+      </div>
+      <div class="actionbar">
+        <button onclick="saveSettings()">Save &amp; reboot</button>
+      </div>
+
+      <h3>WiFi</h3>
+      <p>Current network: <span id="wifiSsid">--</span> (<span id="wifiIp">--</span>)</p>
+      <p>Also reachable at <a id="mdnsLink" href="javascript:void(0)"><span id="mdnsHostname">--</span>.local</a>
+        -- changes when Piste ID is saved.</p>
+      <div class="actionbar">
+        <button onclick="resetWifi()" class="danger">Reconfigure WiFi</button>
+      </div>
+      <p style="font-size:14px;color:#aaa;">
+        Reboots into setup mode: connect to the <strong>Favero_OPP2-setup</strong>
+        WiFi network to pick a new network and re-enter these settings.
+      </p>
+
+      <div id="statusLineSettings" class="status-line"></div>
+    </div>
+  </section>
 
   <script>
+    // ── View router ──────────────────────────────────────────────────────
+    // The four screens used to be separate pages reached by real
+    // navigation; merged into one document (with view switching instead of
+    // navigation) so the Fullscreen API below can actually stay engaged --
+    // the browser drops fullscreen on every real page load/navigation, so
+    // that was incompatible with a multi-page site.
+    const VIEWS = ['remote', 'repeater', 'opp2', 'settings'];
+    const VIEW_TITLES = { remote: 'Remote', repeater: 'Repeater', opp2: 'Match', settings: 'Settings' };
+
+    function showView(name) {
+      if (!VIEWS.includes(name)) name = 'remote';
+      VIEWS.forEach(function (v) {
+        document.getElementById('view-' + v).style.display = (v === name) ? 'block' : 'none';
+      });
+      document.querySelectorAll('nav a').forEach(function (a) {
+        a.classList.toggle('active', a.dataset.view === name);
+      });
+      document.title = 'Favero_OPP2 — ' + VIEW_TITLES[name];
+      if (name === 'settings') loadSettings();
+    }
+    window.addEventListener('hashchange', function () {
+      showView(location.hash.slice(1));
+    });
+    showView(location.hash.slice(1) || 'remote');
+
+    // ── Fullscreen ───────────────────────────────────────────────────────
+    // Support is inconsistent (notably iOS Safari, historically), so this
+    // is feature-detected and hidden rather than assumed -- same approach
+    // as the vibration feedback below.
+    (function () {
+      const btn = document.getElementById('btnFullscreen');
+      if (!document.documentElement.requestFullscreen) {
+        btn.style.display = 'none';
+        return;
+      }
+      btn.addEventListener('click', function () {
+        if (document.fullscreenElement) {
+          document.exitFullscreen();
+        } else {
+          document.documentElement.requestFullscreen();
+        }
+      });
+      document.addEventListener('fullscreenchange', function () {
+        btn.textContent = document.fullscreenElement ? 'Exit fullscreen' : 'Fullscreen';
+      });
+    })();
+
+    // ── Remote view ──────────────────────────────────────────────────────
     // Haptic feedback on button press -- navigator.vibrate() is
     // unsupported on iOS Safari (Apple has never implemented it, even for
-    // home-screen web apps), so the feature check above doubles as the
-    // "only where supported" behavior; it's simply a no-op there.
-    if (navigator.vibrate) {
-      document.querySelectorAll('.grid-item a').forEach(function (link) {
-        link.addEventListener('click', function () { navigator.vibrate(100); });
-      });
+    // home-screen web apps), so the feature check doubles as the "only
+    // where supported" behavior; it's simply a no-op there.
+    function faveroAction(url) {
+      if (navigator.vibrate) navigator.vibrate(100);
+      fetch(url);
+    }
+
+    // ── Shared live-state polling (Repeater + OPP2 views) ───────────────
+    const APPARATUS_STATE = ["Fencing", "Halt", "Pause", "Waiting", "Ending", "Unknown"];
+    const WEAPON = ["Foil", "Epee", "Sabre", "Unknown"];
+    const PRIORITY = ["", ">", "<", ""]; // NONE, RIGHT, LEFT, UNKNOWN
+
+    function setLamp(id, on, cls) {
+      const el = document.getElementById(id);
+      el.classList.toggle(cls, !!on);
+    }
+
+    function setText(cls, text) {
+      document.querySelectorAll('.' + cls).forEach(function (el) { el.textContent = text; });
+    }
+
+    async function poll() {
+      try {
+        const res = await fetch('/api/state', { cache: 'no-store' });
+        const s = await res.json();
+
+        // Repeater-only elements
+        document.getElementById('leftScore').textContent = s.left.score;
+        document.getElementById('rightScore').textContent = s.right.score;
+        const mins = Math.floor(s.clock.time_ms / 60000);
+        const secs = Math.floor((s.clock.time_ms % 60000) / 1000);
+        const clockEl = document.getElementById('clock');
+        clockEl.textContent = mins + ':' + String(secs).padStart(2, '0');
+        clockEl.classList.toggle('clock-running', s.clock.running);
+        clockEl.classList.toggle('clock-stopped', !s.clock.running);
+        setLamp('leftOnTarget', s.left.on_target, 'on-left');
+        setLamp('rightOnTarget', s.right.on_target, 'on-right');
+        setLamp('leftWhite', s.left.white, 'white-on');
+        setLamp('rightWhite', s.right.white, 'white-on');
+        setLamp('leftYellow', s.left.yellow_card, 'on-yellow');
+        setLamp('rightYellow', s.right.yellow_card, 'on-yellow');
+        setLamp('leftRed', s.left.red_card, 'on-red');
+        setLamp('rightRed', s.right.red_card, 'on-red');
+        document.getElementById('leftPrio').textContent = PRIORITY[s.priority] === '<' ? PRIORITY[s.priority] : '';
+        document.getElementById('rightPrio').textContent = PRIORITY[s.priority] === '>' ? PRIORITY[s.priority] : '';
+        document.getElementById('statusLineRepeater').textContent = '';
+
+        // Shared between Repeater and OPP2 views
+        setText('apparatusState', APPARATUS_STATE[s.apparatus_state] || '?');
+        setText('matchNum', s.match_num);
+        setText('weapon', WEAPON[s.weapon] || '?');
+        setText('leftCurrent', s.left.name ? (s.left.name + (s.left.noc ? ' (' + s.left.noc + ')' : '')) : '--');
+        setText('rightCurrent', s.right.name ? (s.right.name + (s.right.noc ? ' (' + s.right.noc + ')' : '')) : '--');
+
+        // OPP2-only elements
+        document.getElementById('timerWarning').style.display = s.clock.running ? 'block' : 'none';
+        document.querySelectorAll('.lifecycle-btn').forEach(function (btn) {
+          btn.disabled = s.clock.running;
+        });
+        if (!document.activeElement || document.activeElement.tagName !== 'INPUT') {
+          document.getElementById('leftName').placeholder = s.left.name || 'Left fencer';
+          document.getElementById('rightName').placeholder = s.right.name || 'Right fencer';
+          document.getElementById('leftNoc').placeholder = s.left.noc || 'NOC';
+          document.getElementById('rightNoc').placeholder = s.right.noc || 'NOC';
+        }
+      } catch (e) {
+        document.getElementById('statusLineRepeater').textContent = 'Connection lost, retrying...';
+      }
+    }
+
+    async function action(url) {
+      if (navigator.vibrate) navigator.vibrate(100);
+      document.getElementById('statusLineOpp2').textContent = 'Sending ' + url + '...';
+      try {
+        const res = await fetch(url);
+        const text = await res.text();
+        document.getElementById('statusLineOpp2').textContent = res.ok ? '' : text;
+        poll();
+      } catch (e) {
+        document.getElementById('statusLineOpp2').textContent = 'Failed: ' + url;
+      }
+    }
+
+    function setFencers() {
+      const l = encodeURIComponent(document.getElementById('leftName').value);
+      const ln = encodeURIComponent(document.getElementById('leftNoc').value);
+      const r = encodeURIComponent(document.getElementById('rightName').value);
+      const rn = encodeURIComponent(document.getElementById('rightNoc').value);
+      action(`/Opp2SetFencer?side=L&name=${l}&noc=${ln}`);
+      setTimeout(() => action(`/Opp2SetFencer?side=R&name=${r}&noc=${rn}`), 300);
+    }
+
+    setInterval(poll, 500);
+    poll();
+
+    // ── Settings view ────────────────────────────────────────────────────
+    async function loadSettings() {
+      const res = await fetch('/api/settings-info');
+      const s = await res.json();
+      document.getElementById('pisteId').value = s.pisteId;
+      document.getElementById('mqttBroker').value = s.mqttBroker;
+      document.getElementById('mqttPort').value = s.mqttPort;
+      document.getElementById('wifiSsid').textContent = s.wifiSsid;
+      document.getElementById('wifiIp').textContent = s.wifiIp;
+      document.getElementById('mdnsHostname').textContent = s.mdnsHostname;
+      document.getElementById('mdnsLink').href = `http://${s.mdnsHostname}.local/`;
+    }
+
+    async function saveSettings() {
+      if (navigator.vibrate) navigator.vibrate(100);
+      const pisteId = encodeURIComponent(document.getElementById('pisteId').value);
+      const mqttBroker = encodeURIComponent(document.getElementById('mqttBroker').value);
+      const mqttPort = encodeURIComponent(document.getElementById('mqttPort').value);
+      document.getElementById('statusLineSettings').textContent = 'Saving, rebooting...';
+      await fetch(`/api/settings-save?pisteId=${pisteId}&mqttBroker=${mqttBroker}&mqttPort=${mqttPort}`);
+      document.getElementById('statusLineSettings').textContent = 'Rebooted -- reload in a few seconds.';
+    }
+
+    function resetWifi() {
+      if (!confirm('Reboot into WiFi setup mode? You will need to reconnect to the Favero_OPP2-setup network.')) return;
+      if (navigator.vibrate) navigator.vibrate(100);
+      fetch('/api/wifi/reset');
+      document.getElementById('statusLineSettings').textContent = 'Rebooting into setup mode...';
     }
   </script>
 

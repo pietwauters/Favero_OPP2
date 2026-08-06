@@ -178,7 +178,7 @@ void schedulePendingAction(PendingAction action) {
 void addFaveroIrRoute(const char* path, void (*action)()) {
     g_server.on(path, HTTP_GET, [action](AsyncWebServerRequest* request) {
         action();
-        request->redirect("/");
+        request->send(200, "text/plain", "OK");
     });
 }
 
@@ -218,9 +218,10 @@ OPP2::Weapon parseWeapon(const String& s) {
 }
 
 void setupWebServer() {
-    // Remote-control page -- same button set as esp32_FaveroRemoteControl,
-    // each a full-page GET (link, not fetch), so each handler redirects
-    // back to "/" once the IR command has been sent.
+    // Remote-control page -- same button set as esp32_FaveroRemoteControl.
+    // Buttons call these via fetch() (index.html's faveroAction()), not
+    // real navigation, so the four views can live in one document and the
+    // Fullscreen API below doesn't get dropped by a page load on every tap.
     addFaveroIrRoute("/FaveroStartStop", []() { g_faveroIr.startStop(); });
     addFaveroIrRoute("/FaveroRearm", []() { g_faveroIr.rearm(); });
     addFaveroIrRoute("/FaveroPause", []() { g_faveroIr.pause(); });

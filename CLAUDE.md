@@ -98,6 +98,55 @@ ESP-IDF 4.4.6 — every one confirmed by a real failure, not precaution:
   `/api/settings-info` / `/api/settings-save` (no shared prefix at all).
   Check any new route against this before adding it.
 
+## Web UI is one page (`data/index.html`), not four
+
+Remote/Repeater/OPP2/Settings used to be four separate SPIFFS files reached
+by real `<a href>` navigation; merged into one document (2026-08-06) with
+JS-only view switching (`showView()`, driven by `location.hash` —
+`#remote`/`#repeater`/`#opp2`/`#settings`) plus a Fullscreen API toggle.
+Reason: the Fullscreen API spec forces the browser out of fullscreen on
+*any* top-level navigation, so a genuine multi-page site can never stay
+fullscreen across nav clicks — merging into one document (view-switch, no
+navigation) was the only way to make the fullscreen button meaningful.
+`repeater.html`/`opp2.html`/`settings.html` are now tiny stubs that
+`location.replace()` to the equivalent `/#...` route, kept only so
+pre-existing bookmarks/links to those paths (e.g. a spectator display
+already pointed at `.../repeater.html`) don't silently 404.
+
+Gotcha hit while building this, worth remembering: `element.style.display
+= ''` does **not** show an element that a stylesheet rule hides (here,
+`.view { display: none; }`) — clearing the inline style just removes the
+override and falls back to the CSS rule, so the element stays hidden. Must
+set an explicit value (`'block'`) for the shown view, not `''`.
+
+Because all four views now share one DOM, element IDs that used to be
+independent per-page (`statusLine`, `apparatusState`, `matchNum`,
+`weapon`, `leftCurrent`/`rightCurrent`) had to be deduplicated: `apparatus
+State`/`matchNum`/`weapon`/`leftCurrent`/`rightCurrent` became **classes**
+(shared between the Repeater and OPP2 views, updated via one shared
+`poll()` using `querySelectorAll`), while `statusLine` became three
+distinct IDs (`statusLineRepeater`/`statusLineOpp2`/`statusLineSettings`)
+since their semantics differ per view. Adding a fifth view later must
+follow the same pattern — check for ID collisions against the whole file,
+not just within the section being added, since there's no per-page
+scoping anymore.
+
+The Remote page's Favero buttons used to be `<a href="/FaveroXxx">`
+wrapping a `<button>` (real navigation, server-side redirected back to
+`/`). Converted to `onclick="faveroAction(...)"` (`fetch()`, no
+navigation) for the same reason as the merge itself — any real navigation
+here would drop fullscreen too. `addFaveroIrRoute()` (`main.cpp`) no
+longer redirects, just returns 200, since nothing navigates to these
+routes anymore.
+
+Fullscreen support is feature-detected (`document.documentElement.
+requestFullscreen` existence check) and the button hidden if absent, same
+pattern as the vibration feedback below — both are inconsistently
+supported on iOS Safari historically. The button label is plain ASCII
+("Fullscreen"/"Exit fullscreen"), not an icon glyph — see "Web UI strings
+are plain ASCII only" in Protocol boundaries below; that decision predates
+this feature but applies just as much here.
+
 ## mDNS hostname is per-piste, not hardcoded
 
 `MDNS.begin()` used to advertise a single fixed `"favero-opp2"` for every
