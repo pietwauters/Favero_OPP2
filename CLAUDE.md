@@ -98,6 +98,25 @@ ESP-IDF 4.4.6 — every one confirmed by a real failure, not precaution:
   `/api/settings-info` / `/api/settings-save` (no shared prefix at all).
   Check any new route against this before adding it.
 
+## mDNS hostname is per-piste, not hardcoded
+
+`MDNS.begin()` used to advertise a single fixed `"favero-opp2"` for every
+board — fine for one device, but two boards on the same LAN/event would
+fight over `favero-opp2.local`. Fixed 2026-08-06: `buildMdnsHostname()`
+(`main.cpp`) derives `favero-opp2-<pisteId>` from the existing `pisteId`
+setting instead, sanitized to a legal DNS label (lowercased, non
+alnum→hyphen) since `pisteId` is free text typed into the settings page,
+not guaranteed clean. Checked `esp32scoringdeviceMqtt` first per usual —
+its `friendly_name`/numeric-ID split (`Opp2Handler.cpp`) only feeds the
+*MQTT topic's* `piste_id` field, not its mDNS hostname (which is always
+plain `Piste_XXX`, numeric-only, `network.cpp`); don't conflate the two
+when working on either project. Like the sibling, a hostname change only
+takes effect on next boot — settings-save already forces a reboot, so
+this needed no live `mdns_hostname_set()` re-call. The resulting hostname
+is echoed back on the settings page (`/api/settings-info`'s
+`mdnsHostname` field) since there'd otherwise be no way to find a given
+board's address on a multi-piste LAN without a serial monitor.
+
 ## MQTT: esp_mqtt_client, not PubSubClient — and callback stack safety
 
 - `PubSubClient`/`WiFiClient` was tried first. `subscribe()` reported

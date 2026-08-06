@@ -36,6 +36,8 @@
 
     <h3>WiFi</h3>
     <p>Current network: <span id="wifiSsid">--</span> (<span id="wifiIp">--</span>)</p>
+    <p>Also reachable at <a id="mdnsLink" href="#"><span id="mdnsHostname">--</span>.local</a>
+      -- changes when Piste ID is saved.</p>
     <div class="actionbar">
       <button onclick="resetWifi()" class="danger">Reconfigure WiFi</button>
     </div>
@@ -56,6 +58,8 @@
       document.getElementById('mqttPort').value = s.mqttPort;
       document.getElementById('wifiSsid').textContent = s.wifiSsid;
       document.getElementById('wifiIp').textContent = s.wifiIp;
+      document.getElementById('mdnsHostname').textContent = s.mdnsHostname;
+      document.getElementById('mdnsLink').href = `http://${s.mdnsHostname}.local/`;
     }
 
     async function saveSettings() {
