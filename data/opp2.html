@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Favero_OPP2 — Bout</title>
+  <title>Favero_OPP2 — Match</title>
   <meta name="viewport" content="height=device-height, initial-scale=1">
   <meta name="mobile-web-app-capable" content="yes">
   <link rel="icon" href="data:,">
@@ -12,35 +12,12 @@
 
   <nav>
     <a href="/">Remote</a>
+    <a href="/repeater.html">Repeater</a>
     <a href="/opp2.html" class="active">OPP2</a>
     <a href="/settings.html">Settings</a>
   </nav>
 
   <div class="panel">
-
-    <div class="scoreboard">
-      <div class="side">
-        <div id="leftScore" class="score">--</div>
-        <div>
-          <span id="leftOnTarget" class="lamp"></span>
-          <span id="leftWhite" class="lamp"></span>
-          <span id="leftYellow" class="lamp card">Y</span>
-          <span id="leftRed" class="lamp card">R</span>
-          <span id="leftPrio">&nbsp;</span>
-        </div>
-      </div>
-      <div id="clock" class="clock">-:--</div>
-      <div class="side">
-        <div id="rightScore" class="score">--</div>
-        <div>
-          <span id="rightPrio">&nbsp;</span>
-          <span id="rightYellow" class="lamp card">Y</span>
-          <span id="rightRed" class="lamp card">R</span>
-          <span id="rightWhite" class="lamp"></span>
-          <span id="rightOnTarget" class="lamp"></span>
-        </div>
-      </div>
-    </div>
 
     <div class="status-line">
       State: <span id="apparatusState">--</span> &nbsp;|&nbsp;
@@ -97,37 +74,11 @@
   <script>
     const APPARATUS_STATE = ["Fencing", "Halt", "Pause", "Waiting", "Ending", "Unknown"];
     const WEAPON = ["Foil", "Epee", "Sabre", "Unknown"];
-    const PRIORITY = ["", ">", "<", ""]; // NONE, RIGHT, LEFT, UNKNOWN
-
-    function setLamp(id, on, cls) {
-      const el = document.getElementById(id);
-      el.classList.toggle(cls, !!on);
-    }
 
     async function poll() {
       try {
         const res = await fetch('/api/state', { cache: 'no-store' });
         const s = await res.json();
-
-        document.getElementById('leftScore').textContent = s.left.score;
-        document.getElementById('rightScore').textContent = s.right.score;
-
-        const mins = Math.floor(s.clock.time_ms / 60000);
-        const secs = Math.floor((s.clock.time_ms % 60000) / 1000);
-        document.getElementById('clock').textContent =
-          (s.clock.running ? '> ' : '|| ') + mins + ':' + String(secs).padStart(2, '0');
-
-        setLamp('leftOnTarget', s.left.on_target, 'on-left');
-        setLamp('rightOnTarget', s.right.on_target, 'on-right');
-        setLamp('leftWhite', s.left.white, 'white-on');
-        setLamp('rightWhite', s.right.white, 'white-on');
-        setLamp('leftYellow', s.left.yellow_card, 'on-yellow');
-        setLamp('rightYellow', s.right.yellow_card, 'on-yellow');
-        setLamp('leftRed', s.left.red_card, 'on-red');
-        setLamp('rightRed', s.right.red_card, 'on-red');
-
-        document.getElementById('leftPrio').textContent = PRIORITY[s.priority] === '<' ? PRIORITY[s.priority] : '';
-        document.getElementById('rightPrio').textContent = PRIORITY[s.priority] === '>' ? PRIORITY[s.priority] : '';
 
         document.getElementById('apparatusState').textContent = APPARATUS_STATE[s.apparatus_state] || '?';
         document.getElementById('matchNum').textContent = s.match_num;
