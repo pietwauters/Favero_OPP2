@@ -300,7 +300,15 @@ void setupWebServer() {
     // fail a SPIFFS lookup first before falling through to its real
     // handler -- measured as a consistent ~330ms gap between static file
     // serving and API routes.
-    g_server.serveStatic("/", SPIFFS, "/").setDefaultFile("index.html");
+    // No Cache-Control by default meant browsers could skip revalidation
+    // entirely on a normal reload and keep showing a stale page/style
+    // after a data/ update was reflashed -- confirmed live (device served
+    // the new repeater.html/style.css correctly; the browser just never
+    // asked for it again). Static files are a few KB on a LAN, so
+    // no-store's cost is negligible next to that footgun.
+    g_server.serveStatic("/", SPIFFS, "/")
+        .setDefaultFile("index.html")
+        .setCacheControl("no-store");
 }
 
 }  // namespace
