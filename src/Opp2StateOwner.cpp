@@ -124,6 +124,24 @@ void Opp2StateOwner::setWeapon(OPP2::Weapon weapon) {
 void Opp2StateOwner::nextMatch() { publishControl(OPP2::Command::NEXT); }
 void Opp2StateOwner::prevMatch() { publishControl(OPP2::Command::PREV); }
 
+void Opp2StateOwner::endMatch() {
+    setApparatusState(OPP2::ApparatusState::ENDING);
+    publishControl(OPP2::Command::END);
+}
+
+void Opp2StateOwner::handleSoftwareControl(const OPP2::Control& control) {
+    switch (control.command) {
+        case OPP2::Command::ACK:
+            setApparatusState(OPP2::ApparatusState::WAITING);
+            break;
+        case OPP2::Command::NAK:
+            setApparatusState(OPP2::ApparatusState::HALT);
+            break;
+        default:
+            break;
+    }
+}
+
 void Opp2StateOwner::handleSoftwareMatch(const OPP2::Match& match) {
     m_state.match = match;
     publishMatch();  // relay under apparatus/match -- see handleSoftwareFencers

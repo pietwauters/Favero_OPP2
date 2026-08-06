@@ -150,6 +150,21 @@ fail checksum validation once GPIO13 is wired to a live Favero.
   Explicit instruction: "Absolutely not... A scoring device should not
   subscribe to that." If a CMS handles `control`, it's also expected to
   publish standard `match`/`fencers` — verified true for Atlas in practice.
+- **End is a request, not a fact.** `ApparatusState::ENDING` is spec'd as
+  "awaiting ACK from software" (opp2-library `opp2_types.h`) — pressing End
+  publishes `control{command:END}` and *stays* in ENDING until the CMS
+  answers on `software/.../control` with `ACK` (→ `WAITING`) or `NAK`
+  (→ `HALT`, i.e. as if End had never been pressed). Fixed 2026-08-06: the
+  original implementation only ever set local state to ENDING and never
+  published the `END` request at all, so nothing could ever ACK it — a
+  real apparatus got stuck showing "Ending" indefinitely (score 4-4,
+  priority right — a legitimately end-able bout). Confirmed against
+  `esp32scoringdeviceMqtt/src/Opp2Handler.cpp`'s working END/ACK/NAK
+  handling before fixing. If End ever seems to hang again, first check
+  whether the CMS is actually subscribed to and answering on
+  `software/<piste>/control` at all — this bridge's half is now correct,
+  but a CMS that doesn't answer control-END will still hang forever by
+  design (that's the point of an ACK protocol).
 - **`handleSoftwareMatch`/`handleSoftwareFencers` relay onward** under
   `apparatus/match` + `apparatus/fencers` (not just update local state).
   Reason: other devices on a piste (displays, repeaters) are expected to
@@ -184,5 +199,6 @@ spending long on first-principles debugging.
 - No MQTT broker auth/TLS (the real broker this was tested against is
   anonymous-reachable on port 1883 for at least `apparatus/*`).
 - No OTA (traded away for the larger app partition — see above).
-- Begin/Halt/Pause/End remain purely local UI state; only Next/Prev go
-  through the CMS control-command round-trip.
+- Begin/Halt/Pause remain purely local UI state. End now does a proper
+  CMS round-trip (see "Protocol boundaries" below) — Next/Prev/End are the
+  three lifecycle actions that leave local state and wait on the CMS.

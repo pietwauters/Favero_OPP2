@@ -43,6 +43,22 @@ public:
     void nextMatch();
     void prevMatch();
 
+    /// Signals end-of-match: sets local state to ENDING (spec: "awaiting
+    /// ACK from software") AND publishes a `control{command:END}` request
+    /// -- the actual request to the CMS, without which no ACK/NAK can ever
+    /// arrive and the apparatus is stuck in ENDING forever. Always
+    /// re-publishes the request even if already ENDING, so pressing End
+    /// again retries a request that was dropped or never answered.
+    void endMatch();
+
+    /// Called from main.cpp's MQTT callback on a software-published
+    /// control message. ACK moves the apparatus on to WAITING (match
+    /// over, ready for the next one); NAK means the CMS rejected the end
+    /// request (e.g. score/priority doesn't actually satisfy a valid
+    /// end-of-match condition) -- falls back to HALT so the referee
+    /// decides what happens next, same as if End had never been pressed.
+    void handleSoftwareControl(const OPP2::Control& control);
+
     /// Called from main.cpp's MQTT callback when a software/match or
     /// software/fencers message arrives -- mirrors it into local state
     /// AND relays it under apparatus/match + apparatus/fencers, so other

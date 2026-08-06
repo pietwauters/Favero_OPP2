@@ -69,6 +69,12 @@ void onMqttMessage(const char* topic, const char* payload, size_t length) {
             OPP2::DeserializeError::OK) {
             g_opp2.handleSoftwareFencers(fencers);
         }
+    } else if (parsed.message_type == OPP2::MessageType::CONTROL) {
+        OPP2::Control control;
+        if (OPP2::Deserializer::deserialize(payload, length, control) ==
+            OPP2::DeserializeError::OK) {
+            g_opp2.handleSoftwareControl(control);
+        }
     }
 }
 
@@ -81,6 +87,9 @@ void onMqttConnect(bool /*sessionPresent*/) {
     g_mqtt.subscribe(topic, 1);
     OPP2::TopicParser::buildFrom(g_settings.pisteId, OPP2::Publisher::SOFTWARE,
                                  OPP2::MessageType::FENCERS, topic, sizeof(topic));
+    g_mqtt.subscribe(topic, 1);
+    OPP2::TopicParser::buildFrom(g_settings.pisteId, OPP2::Publisher::SOFTWARE,
+                                 OPP2::MessageType::CONTROL, topic, sizeof(topic));
     g_mqtt.subscribe(topic, 1);
 }
 
@@ -189,9 +198,7 @@ void setupWebServer() {
     addOpp2Route("/Opp2Pause", [](AsyncWebServerRequest*) {
         g_opp2.setApparatusState(OPP2::ApparatusState::PAUSE);
     });
-    addOpp2Route("/Opp2End", [](AsyncWebServerRequest*) {
-        g_opp2.setApparatusState(OPP2::ApparatusState::ENDING);
-    });
+    addOpp2Route("/Opp2End", [](AsyncWebServerRequest*) { g_opp2.endMatch(); });
     addOpp2Route("/Opp2SetWeapon", [](AsyncWebServerRequest* request) {
         if (request->hasParam("weapon")) {
             g_opp2.setWeapon(parseWeapon(request->getParam("weapon")->value()));
