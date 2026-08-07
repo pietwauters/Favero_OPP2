@@ -11,13 +11,14 @@ const char* kNamespace = "favero_opp2";
 void Settings::load() {
     Preferences prefs;
     prefs.begin(kNamespace, /*readOnly=*/true);
-    String piste = prefs.getString("pisteId", pisteId);
+    pisteNr = prefs.getUInt("pisteNr", pisteNr);
+    String name = prefs.getString("pisteName", pisteName);
     String broker = prefs.getString("mqttBroker", mqttBroker);
     mqttPort = prefs.getUShort("mqttPort", mqttPort);
     prefs.end();
 
-    strncpy(pisteId, piste.c_str(), sizeof(pisteId) - 1);
-    pisteId[sizeof(pisteId) - 1] = '\0';
+    strncpy(pisteName, name.c_str(), sizeof(pisteName) - 1);
+    pisteName[sizeof(pisteName) - 1] = '\0';
     strncpy(mqttBroker, broker.c_str(), sizeof(mqttBroker) - 1);
     mqttBroker[sizeof(mqttBroker) - 1] = '\0';
 }
@@ -25,7 +26,8 @@ void Settings::load() {
 void Settings::save() const {
     Preferences prefs;
     prefs.begin(kNamespace, /*readOnly=*/false);
-    prefs.putString("pisteId", pisteId);
+    prefs.putUInt("pisteNr", pisteNr);
+    prefs.putString("pisteName", pisteName);
     prefs.putString("mqttBroker", mqttBroker);
     prefs.putUShort("mqttPort", mqttPort);
     prefs.end();

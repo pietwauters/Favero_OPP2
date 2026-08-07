@@ -148,8 +148,12 @@
     <div class="panel">
       <h3>OPP2 / MQTT</h3>
       <div class="form-row">
-        <label for="pisteId">Piste ID</label>
-        <input id="pisteId" type="text" maxlength="15">
+        <label for="pisteNr">Piste number</label>
+        <input id="pisteNr" type="number" min="0" max="999">
+      </div>
+      <div class="form-row">
+        <label for="pisteName">Piste name (optional)</label>
+        <input id="pisteName" type="text" maxlength="15" placeholder="e.g. Red, Podium -- blank uses the number">
       </div>
       <div class="form-row">
         <label for="mqttBroker">MQTT broker host</label>
@@ -166,7 +170,7 @@
       <h3>WiFi</h3>
       <p>Current network: <span id="wifiSsid">--</span> (<span id="wifiIp">--</span>)</p>
       <p>Also reachable at <a id="mdnsLink" href="javascript:void(0)"><span id="mdnsHostname">--</span>.local</a>
-        -- changes when Piste ID is saved.</p>
+        -- changes when Piste number is saved.</p>
       <div class="actionbar">
         <button onclick="resetWifi()" class="danger">Reconfigure WiFi</button>
       </div>
@@ -395,7 +399,8 @@
     async function loadSettings() {
       const res = await fetch('/api/settings-info');
       const s = await res.json();
-      document.getElementById('pisteId').value = s.pisteId;
+      document.getElementById('pisteNr').value = s.pisteNr;
+      document.getElementById('pisteName').value = s.pisteName;
       document.getElementById('mqttBroker').value = s.mqttBroker;
       document.getElementById('mqttPort').value = s.mqttPort;
       document.getElementById('wifiSsid').textContent = s.wifiSsid;
@@ -406,11 +411,12 @@
 
     async function saveSettings() {
       feedback();
-      const pisteId = encodeURIComponent(document.getElementById('pisteId').value);
+      const pisteNr = encodeURIComponent(document.getElementById('pisteNr').value);
+      const pisteName = encodeURIComponent(document.getElementById('pisteName').value);
       const mqttBroker = encodeURIComponent(document.getElementById('mqttBroker').value);
       const mqttPort = encodeURIComponent(document.getElementById('mqttPort').value);
       document.getElementById('statusLineSettings').textContent = 'Saving, rebooting...';
-      await fetch(`/api/settings-save?pisteId=${pisteId}&mqttBroker=${mqttBroker}&mqttPort=${mqttPort}`);
+      await fetch(`/api/settings-save?pisteNr=${pisteNr}&pisteName=${pisteName}&mqttBroker=${mqttBroker}&mqttPort=${mqttPort}`);
       document.getElementById('statusLineSettings').textContent = 'Rebooted -- reload in a few seconds.';
     }
 

@@ -37,10 +37,13 @@ Esp32MqttClient       g_mqtt;
 
 AsyncWebServer g_server(80);
 
-// Set once in setup() from g_settings.pisteId, exposed via /api/settings-info
-// so the settings page can show it -- otherwise there'd be no way to find a
-// given board's address on a multi-piste LAN without a serial monitor.
-char g_mdnsHostname[32] = "favero-opp2";
+// Resolved OPP2 piste_id (Settings.pisteName if set, else Settings.pisteNr)
+// and mDNS hostname, both set once in setup() and exposed via
+// /api/settings-info so the settings page can show them -- otherwise
+// there'd be no way to find a given board's address on a multi-piste LAN
+// without a serial monitor.
+char g_pisteId[OPP2::PISTE_ID_MAX] = "1";
+char g_mdnsHostname[16]            = "piste_001";
 
 // Deferred restart: HTTP handlers set this instead of calling ESP.restart()
 // directly, so the response has a chance to flush to the client first.
@@ -87,45 +90,39 @@ void onMqttConnect(bool /*sessionPresent*/) {
     g_opp2.publishAll();
 
     char topic[64];
-    OPP2::TopicParser::buildFrom(g_settings.pisteId, OPP2::Publisher::SOFTWARE,
+    OPP2::TopicParser::buildFrom(g_pisteId, OPP2::Publisher::SOFTWARE,
                                  OPP2::MessageType::MATCH, topic, sizeof(topic));
     g_mqtt.subscribe(topic, 1);
-    OPP2::TopicParser::buildFrom(g_settings.pisteId, OPP2::Publisher::SOFTWARE,
+    OPP2::TopicParser::buildFrom(g_pisteId, OPP2::Publisher::SOFTWARE,
                                  OPP2::MessageType::FENCERS, topic, sizeof(topic));
     g_mqtt.subscribe(topic, 1);
-    OPP2::TopicParser::buildFrom(g_settings.pisteId, OPP2::Publisher::SOFTWARE,
+    OPP2::TopicParser::buildFrom(g_pisteId, OPP2::Publisher::SOFTWARE,
                                  OPP2::MessageType::CONTROL, topic, sizeof(topic));
     g_mqtt.subscribe(topic, 1);
 }
 
-// Builds this device's own mDNS hostname from the piste ID, so multiple
-// boards on the same LAN each get a distinct <name>.local instead of every
-// one fighting over the single hardcoded "favero-opp2.local" -- confirmed
-// as a real problem (settings page has no per-piste mDNS name at all).
-// pisteId is free text entered via the settings page, so it's sanitized
-// to a legal DNS label (lowercase alnum + hyphen) rather than assumed
-// clean; an empty result (e.g. pisteId was all punctuation) falls back to
-// the old fixed name rather than advertising a bare "favero-opp2-".
-void buildMdnsHostname(const char* pisteId, char* out, size_t outSize) {
-    static const char kPrefix[] = "favero-opp2-";
-    strncpy(out, kPrefix, outSize - 1);
-    out[outSize - 1] = '\0';
-    size_t pos = strlen(out);
-
-    bool wroteChar = false;
-    for (const char* p = pisteId; *p && pos + 1 < outSize; ++p) {
-        char c = *p;
-        if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
-        if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9'))) c = '-';
-        out[pos++] = c;
-        wroteChar = true;
-    }
-    out[pos] = '\0';
-
-    if (!wroteChar) {
-        strncpy(out, "favero-opp2", outSize - 1);
+// OPP2 piste_id: the friendly name if one is set, else the piste number --
+// matches esp32scoringdeviceMqtt's Opp2Handler.cpp convention exactly, so
+// this bridge looks like any other piste to the CMS, not something
+// Favero-specific.
+void buildPisteId(const Settings& settings, char* out, size_t outSize) {
+    if (settings.pisteName[0] != '\0') {
+        strncpy(out, settings.pisteName, outSize - 1);
         out[outSize - 1] = '\0';
+    } else {
+        snprintf(out, outSize, "%u", settings.pisteNr);
     }
+}
+
+// mDNS hostname and MQTT client ID are always purely numeric
+// ("piste_007.local" / "Piste_007"), regardless of any friendly name --
+// also matching esp32scoringdeviceMqtt's convention (its soft_ap_ssid and
+// MQTT client ID, network.cpp/CyranoHandler.cpp, are both "Piste_%03d"
+// from the number alone). Unlike the old free-text-based scheme, this
+// needs no sanitizing -- a zero-padded number is always a legal DNS
+// label and MQTT client ID on its own.
+void buildMdnsHostname(uint32_t pisteNr, char* out, size_t outSize) {
+    snprintf(out, outSize, "piste_%03u", pisteNr);
 }
 
 // Accepts either a literal IP or an mDNS "<name>.local" host, matching the
@@ -157,11 +154,12 @@ void setupMqtt() {
     }
 
     char lwtTopic[64];
-    OPP2::TopicParser::buildLwtTopic(g_settings.pisteId, lwtTopic, sizeof(lwtTopic));
+    OPP2::TopicParser::buildLwtTopic(g_pisteId, lwtTopic, sizeof(lwtTopic));
 
     g_mqtt.setServer(broker.toString().c_str(), g_settings.mqttPort);
-    const String clientId = "Favero_OPP2-" + WiFi.macAddress();
-    g_mqtt.setClientId(clientId.c_str());
+    char clientId[16];
+    snprintf(clientId, sizeof(clientId), "Piste_%03u", g_settings.pisteNr);
+    g_mqtt.setClientId(clientId);
     g_mqtt.setWill(lwtTopic, "{\"online\":false}", 1, true);
     g_mqtt.onConnect(onMqttConnect);
     g_mqtt.onMessage(onMqttMessage);
@@ -289,16 +287,20 @@ void setupWebServer() {
     g_server.on("/api/settings-info", HTTP_GET, [](AsyncWebServerRequest* request) {
         char buf[320];
         snprintf(buf, sizeof(buf),
-                 "{\"pisteId\":\"%s\",\"mqttBroker\":\"%s\",\"mqttPort\":%u,"
+                 "{\"pisteNr\":%u,\"pisteName\":\"%s\",\"mqttBroker\":\"%s\",\"mqttPort\":%u,"
                  "\"wifiSsid\":\"%s\",\"wifiIp\":\"%s\",\"mdnsHostname\":\"%s\"}",
-                 g_settings.pisteId, g_settings.mqttBroker, g_settings.mqttPort,
-                 WiFi.SSID().c_str(), WiFi.localIP().toString().c_str(), g_mdnsHostname);
+                 g_settings.pisteNr, g_settings.pisteName, g_settings.mqttBroker,
+                 g_settings.mqttPort, WiFi.SSID().c_str(), WiFi.localIP().toString().c_str(),
+                 g_mdnsHostname);
         request->send(200, "application/json", buf);
     });
     g_server.on("/api/settings-save", HTTP_GET, [](AsyncWebServerRequest* request) {
-        if (request->hasParam("pisteId")) {
-            strncpy(g_settings.pisteId, request->getParam("pisteId")->value().c_str(),
-                    sizeof(g_settings.pisteId) - 1);
+        if (request->hasParam("pisteNr")) {
+            g_settings.pisteNr = request->getParam("pisteNr")->value().toInt();
+        }
+        if (request->hasParam("pisteName")) {
+            strncpy(g_settings.pisteName, request->getParam("pisteName")->value().c_str(),
+                    sizeof(g_settings.pisteName) - 1);
         }
         if (request->hasParam("mqttBroker")) {
             strncpy(g_settings.mqttBroker, request->getParam("mqttBroker")->value().c_str(),
@@ -351,12 +353,13 @@ void setup() {
     // own bind() below can lose that race (AsyncTCP.cpp bind error: -8).
     delay(500);
 
-    buildMdnsHostname(g_settings.pisteId, g_mdnsHostname, sizeof(g_mdnsHostname));
+    buildMdnsHostname(g_settings.pisteNr, g_mdnsHostname, sizeof(g_mdnsHostname));
     MDNS.begin(g_mdnsHostname);
     Serial.printf("WiFi joined: %s  IP: %s  (also reachable at http://%s.local/)\n",
                   WiFi.SSID().c_str(), WiFi.localIP().toString().c_str(), g_mdnsHostname);
 
-    g_opp2.begin(g_settings.pisteId, &g_mqtt);
+    buildPisteId(g_settings, g_pisteId, sizeof(g_pisteId));
+    g_opp2.begin(g_pisteId, &g_mqtt);
     g_faveroIr.begin();
 
     Serial2.begin(2400, SERIAL_8N1, FAVERO_RX_PIN, FAVERO_TX_PIN);

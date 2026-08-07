@@ -155,24 +155,52 @@ is plain ASCII ("Fullscreen"/"Exit fullscreen"), not an icon glyph — see
 "Web UI strings are plain ASCII only" in Protocol boundaries below; that
 decision predates this feature but applies just as much here.
 
-## mDNS hostname is per-piste, not hardcoded
+## Piste identity matches esp32scoringdeviceMqtt exactly, on purpose
 
-`MDNS.begin()` used to advertise a single fixed `"favero-opp2"` for every
-board — fine for one device, but two boards on the same LAN/event would
-fight over `favero-opp2.local`. Fixed 2026-08-06: `buildMdnsHostname()`
-(`main.cpp`) derives `favero-opp2-<pisteId>` from the existing `pisteId`
-setting instead, sanitized to a legal DNS label (lowercased, non
-alnum→hyphen) since `pisteId` is free text typed into the settings page,
-not guaranteed clean. Checked `esp32scoringdeviceMqtt` first per usual —
-its `friendly_name`/numeric-ID split (`Opp2Handler.cpp`) only feeds the
-*MQTT topic's* `piste_id` field, not its mDNS hostname (which is always
-plain `Piste_XXX`, numeric-only, `network.cpp`); don't conflate the two
-when working on either project. Like the sibling, a hostname change only
-takes effect on next boot — settings-save already forces a reboot, so
-this needed no live `mdns_hostname_set()` re-call. The resulting hostname
-is echoed back on the settings page (`/api/settings-info`'s
-`mdnsHostname` field) since there'd otherwise be no way to find a given
-board's address on a multi-piste LAN without a serial monitor.
+`Settings` has two piste-identity fields, mirroring
+`esp32scoringdeviceMqtt/src/Opp2Handler.cpp` field-for-field: a numeric
+`pisteNr` that always exists, and an optional free-text `pisteName`
+(e.g. "Red", "Podium"). Three different things derive from these, each
+matching the sibling's own convention exactly — **do not let any of them
+drift back toward "Favero_OPP2" branding**, since the explicit
+instruction (2026-08-07) was that to the CMS this bridge must look like
+any other piste, not something Favero-specific:
+
+- **OPP2 `piste_id`** (`buildPisteId()`, `main.cpp`) — `pisteName` if
+  set, else `pisteNr` as a string. This is the one place the friendly
+  name matters; it's what the CMS/broker actually sees.
+- **MQTT client ID** — always `Piste_%03u` from `pisteNr` alone, *never*
+  the friendly name, matching `CyranoHandler.cpp`'s
+  `sprintf(mqttClientId, "Piste_%.3d", PisteNr)` exactly. Used to be
+  `"Favero_OPP2-" + WiFi.macAddress()` — wrong on two counts (brand name
+  leaking into a CMS-visible identifier, and not matching the sibling at
+  all).
+- **mDNS hostname** (`buildMdnsHostname()`, `main.cpp`) — always
+  `piste_%03u` from `pisteNr` alone too. This one is *not* CMS-facing
+  (purely a LAN convenience for finding this device's own web UI), but
+  explicit instruction was to drop the `favero-opp2-` prefix here too and
+  match the piste-number convention regardless — so all three identity
+  strings now agree on "just the number," matching the sibling, rather
+  than a fourth bespoke scheme. Being purely numeric, this needs no
+  free-text sanitizing at all (a zero-padded number is always a legal DNS
+  label), unlike the free-text-based scheme this replaced.
+
+One explicitly-approved exception: the WiFi captive-portal AP SSID stays
+`"Favero_OPP2-setup"` (`WiFiSetup.cpp`) — it's only ever seen during
+initial WiFi setup, never by a CMS, and changing it wasn't asked for.
+
+Like the sibling, none of these three take effect live — settings-save
+already forces a reboot, so a hostname/client-ID/piste_id change only
+applies on next boot. The resolved values are echoed back on the
+settings page (`/api/settings-info`) since there'd otherwise be no way to
+find a given board's identity/address on a multi-piste LAN without a
+serial monitor. Note: changing the NVS key names (`pisteId` →
+`pisteNr`/`pisteName`) means a board upgrading from the old scheme loses
+its configured piste number on first boot after the flash — it resets to
+the default (`pisteNr=1`, no name) and must be re-entered once via the
+settings page. No migration path was built for this (one-off, low-stakes
+during active development); worth revisiting if this ever needs to
+survive an OTA update to boards already deployed at an event.
 
 ## MQTT: esp_mqtt_client, not PubSubClient — and callback stack safety
 

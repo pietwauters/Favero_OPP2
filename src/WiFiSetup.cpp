@@ -11,13 +11,15 @@ namespace {
 // the Settings they write into are file-scope statics.
 Settings* g_settings = nullptr;
 
-WiFiManagerParameter g_pisteIdParam("pisteId", "Piste ID", "", 16);
+WiFiManagerParameter g_pisteNrParam("pisteNr", "Piste number", "1", 8);
+WiFiManagerParameter g_pisteNameParam("pisteName", "Piste name (optional, e.g. Red)", "", 16);
 WiFiManagerParameter g_mqttBrokerParam("mqttBroker", "MQTT Broker host", "", 64);
 
 void saveParamsCallback() {
     if (!g_settings) return;
-    strncpy(g_settings->pisteId, g_pisteIdParam.getValue(),
-            sizeof(g_settings->pisteId) - 1);
+    g_settings->pisteNr = strtoul(g_pisteNrParam.getValue(), nullptr, 10);
+    strncpy(g_settings->pisteName, g_pisteNameParam.getValue(),
+            sizeof(g_settings->pisteName) - 1);
     strncpy(g_settings->mqttBroker, g_mqttBrokerParam.getValue(),
             sizeof(g_settings->mqttBroker) - 1);
     g_settings->save();
@@ -27,11 +29,15 @@ void saveParamsCallback() {
 
 void WiFiSetup::begin(Settings& settings) {
     g_settings = &settings;
-    g_pisteIdParam.setValue(settings.pisteId, 16);
+    char pisteNrStr[8];
+    snprintf(pisteNrStr, sizeof(pisteNrStr), "%u", settings.pisteNr);
+    g_pisteNrParam.setValue(pisteNrStr, 8);
+    g_pisteNameParam.setValue(settings.pisteName, 16);
     g_mqttBrokerParam.setValue(settings.mqttBroker, 64);
 
     WiFiManager wm;
-    wm.addParameter(&g_pisteIdParam);
+    wm.addParameter(&g_pisteNrParam);
+    wm.addParameter(&g_pisteNameParam);
     wm.addParameter(&g_mqttBrokerParam);
     wm.setSaveParamsCallback(saveParamsCallback);
     wm.setParamsPage(true);
