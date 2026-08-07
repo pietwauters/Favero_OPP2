@@ -139,13 +139,21 @@ here would drop fullscreen too. `addFaveroIrRoute()` (`main.cpp`) no
 longer redirects, just returns 200, since nothing navigates to these
 routes anymore.
 
-Fullscreen support is feature-detected (`document.documentElement.
-requestFullscreen` existence check) and the button hidden if absent, same
-pattern as the vibration feedback below — both are inconsistently
-supported on iOS Safari historically. The button label is plain ASCII
-("Fullscreen"/"Exit fullscreen"), not an icon glyph — see "Web UI strings
-are plain ASCII only" in Protocol boundaries below; that decision predates
-this feature but applies just as much here.
+Fullscreen support is feature-detected and the button hidden if absent,
+same pattern as the vibration feedback below. Checks vendor-prefixed
+methods too (`webkitRequestFullscreen`/`mozRequestFullScreen`/
+`msRequestFullscreen`), not just the unprefixed `requestFullscreen` —
+older Chromium/WebKit engines only expose the prefixed ones, and checking
+only the modern name wrongly reported them as unsupported (caught
+2026-08-07 when a user reported it working "only on recent Chrome, not
+iOS at all"). iOS Safari is a separate, real platform gap, not a
+detection bug: non-video fullscreen there is gated behind an
+experimental, off-by-default Safari feature flag (Settings > Safari >
+Advanced > Feature Flags > "Fullscreen API") on the iOS versions that
+have it at all — nothing client-side can force this on. The button label
+is plain ASCII ("Fullscreen"/"Exit fullscreen"), not an icon glyph — see
+"Web UI strings are plain ASCII only" in Protocol boundaries below; that
+decision predates this feature but applies just as much here.
 
 ## mDNS hostname is per-piste, not hardcoded
 

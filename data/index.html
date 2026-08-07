@@ -206,25 +206,60 @@
     showView(location.hash.slice(1) || 'remote');
 
     // ── Fullscreen ───────────────────────────────────────────────────────
-    // Support is inconsistent (notably iOS Safari, historically), so this
-    // is feature-detected and hidden rather than assumed -- same approach
-    // as the vibration feedback below.
+    // Support is inconsistent, so this is feature-detected and hidden
+    // rather than assumed -- same approach as the vibration feedback
+    // below. Two separate gaps, both real:
+    //  - Older Chromium/WebKit engines only expose the vendor-prefixed
+    //    methods (webkitRequestFullscreen etc.), not the unprefixed ones
+    //    -- checked as fallbacks here so those aren't wrongly reported as
+    //    unsupported.
+    //  - iOS Safari (iPhone) gates non-video fullscreen behind an
+    //    experimental, off-by-default Safari feature flag (Settings >
+    //    Safari > Advanced > Feature Flags > "Fullscreen API") on the
+    //    versions that have it at all -- nothing client-side can force
+    //    this on; if it's off or the iOS version predates it, the method
+    //    below either won't exist or will silently no-op/reject.
     (function () {
       const btn = document.getElementById('btnFullscreen');
-      if (!document.documentElement.requestFullscreen) {
+      const docEl = document.documentElement;
+
+      function requestFn(el) {
+        return el.requestFullscreen || el.webkitRequestFullscreen ||
+               el.mozRequestFullScreen || el.msRequestFullscreen;
+      }
+      function exitFn() {
+        return document.exitFullscreen || document.webkitExitFullscreen ||
+               document.mozCancelFullScreen || document.msExitFullscreen;
+      }
+      function currentFsElement() {
+        return document.fullscreenElement || document.webkitFullscreenElement ||
+               document.mozFullScreenElement || document.msFullscreenElement;
+      }
+
+      if (!requestFn(docEl)) {
         btn.style.display = 'none';
         return;
       }
+
       btn.addEventListener('click', function () {
-        if (document.fullscreenElement) {
-          document.exitFullscreen();
-        } else {
-          document.documentElement.requestFullscreen();
+        try {
+          if (currentFsElement()) {
+            exitFn().call(document);
+          } else {
+            requestFn(docEl).call(docEl);
+          }
+        } catch (e) {
+          // Nothing more to do -- some engines reject/throw here (e.g.
+          // iOS Safari with the flag above left off).
         }
       });
-      document.addEventListener('fullscreenchange', function () {
-        btn.textContent = document.fullscreenElement ? 'Exit fullscreen' : 'Fullscreen';
-      });
+
+      ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange']
+        .forEach(function (evt) {
+          document.addEventListener(evt, function () {
+            btn.textContent = currentFsElement() ? 'Exit fullscreen' : 'Fullscreen';
+          });
+        });
     })();
 
     // ── Remote view ──────────────────────────────────────────────────────
