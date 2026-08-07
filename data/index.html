@@ -262,13 +262,44 @@
         });
     })();
 
+    // ── Button-press feedback (vibration, falling back to a beep) ───────
+    // navigator.vibrate() is unsupported on iOS Safari (a deliberate
+    // WebKit policy position, not a lagging implementation) and was
+    // removed from Firefox entirely in 2024 -- for those, and for the
+    // rarer case where vibrate() exists but the call itself is rejected
+    // (e.g. tab not focused; it returns false rather than throwing),
+    // fall back to a short tone via the Web Audio API instead, which
+    // Safari does support. Generated in JS rather than an audio file, so
+    // there's nothing to add to SPIFFS.
+    let audioCtx = null;
+    function beep() {
+      try {
+        if (!audioCtx) {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          if (!AudioCtx) return;
+          audioCtx = new AudioCtx();
+        }
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = 880;
+        gain.gain.value = 0.15;
+        osc.connect(gain).connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.08);
+      } catch (e) {
+        // No audio feedback available either -- silently do nothing.
+      }
+    }
+    function feedback() {
+      if (navigator.vibrate && navigator.vibrate(100)) return;
+      beep();
+    }
+
     // ── Remote view ──────────────────────────────────────────────────────
-    // Haptic feedback on button press -- navigator.vibrate() is
-    // unsupported on iOS Safari (Apple has never implemented it, even for
-    // home-screen web apps), so the feature check doubles as the "only
-    // where supported" behavior; it's simply a no-op there.
     function faveroAction(url) {
-      if (navigator.vibrate) navigator.vibrate(100);
+      feedback();
       fetch(url);
     }
 
@@ -336,7 +367,7 @@
     }
 
     async function action(url) {
-      if (navigator.vibrate) navigator.vibrate(100);
+      feedback();
       document.getElementById('statusLineOpp2').textContent = 'Sending ' + url + '...';
       try {
         const res = await fetch(url);
@@ -374,7 +405,7 @@
     }
 
     async function saveSettings() {
-      if (navigator.vibrate) navigator.vibrate(100);
+      feedback();
       const pisteId = encodeURIComponent(document.getElementById('pisteId').value);
       const mqttBroker = encodeURIComponent(document.getElementById('mqttBroker').value);
       const mqttPort = encodeURIComponent(document.getElementById('mqttPort').value);
@@ -385,7 +416,7 @@
 
     function resetWifi() {
       if (!confirm('Reboot into WiFi setup mode? You will need to reconnect to the Favero_OPP2-setup network.')) return;
-      if (navigator.vibrate) navigator.vibrate(100);
+      feedback();
       fetch('/api/wifi/reset');
       document.getElementById('statusLineSettings').textContent = 'Rebooting into setup mode...';
     }
