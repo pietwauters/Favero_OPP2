@@ -289,6 +289,20 @@ short tap gives a card as before, holding past the threshold undoes one
 instead, with a longer/distinct vibration (200ms vs the usual 100ms) so
 it's obvious something different just happened.
 
+**First version didn't work on iOS at all** (confirmed 2026-08-07): iOS
+Safari's own long-press gesture (text-selection callout — Copy/Look Up/
+Translate) races against and wins over the JS timer, firing
+`pointercancel` and showing its own menu before our 500ms elapses.
+`style.css`'s `.button`/`.actionbar button` rules now set
+`-webkit-touch-callout: none`, `user-select: none` (plus vendor prefixes),
+and `touch-action: none` (the last one only on `.button`, since only the
+Red Card buttons need custom press-and-hold handling) — the standard,
+necessary fix for implementing a custom long-press gesture in Safari.
+Verified the underlying pointer-event logic still fires correctly after
+this change (Chrome, dispatched PointerEvents), but the actual Safari
+callout race can only be confirmed on a real iPhone, not through browser
+automation.
+
 ## Protocol boundaries (explicit user decisions, do not relitigate)
 
 - **Next/Prev never guess pool/tableau progression.** They publish

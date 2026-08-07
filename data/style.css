@@ -68,6 +68,18 @@ nav button.fullscreen-btn {
   cursor: pointer;
   height: 70px;
   width: 70px;
+  /* Without these, holding a button down (e.g. the Red Card long-press
+     for undo) races against the browser's own long-press gesture --
+     iOS Safari shows its Copy/Translate/Look Up callout and cancels the
+     pointer sequence before our JS timer ever fires. These are UI
+     controls, not text, so none of the browser's own touch-and-hold
+     handling should ever engage on them. */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  touch-action: none;
 }
 .buttonred {
   background-color: #f44336;
@@ -168,6 +180,11 @@ section {
   background-color: #008CBA;
   color: white;
   cursor: pointer;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
 }
 .actionbar button.danger { background-color: #f44336; }
 .actionbar button:disabled { opacity: 0.4; cursor: not-allowed; }
