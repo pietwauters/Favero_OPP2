@@ -303,6 +303,61 @@ this change (Chrome, dispatched PointerEvents), but the actual Safari
 callout race can only be confirmed on a real iPhone, not through browser
 automation.
 
+**Red cards also have a yellow-LED side effect, confirmed on real
+hardware (2026-08-07): the Favero has no separate red LED at all — giving
+a red card lights the *yellow* one instead.** So while a side has ≥1
+active red card, its yellow telemetry bit is genuinely ambiguous (shared
+with the red card's side effect) and must not be trusted. Handled in
+`updateFromFavero()`:
+- The instant before a side's first red card of a "series" lands
+  (`red_cards` 0→1), whatever the *current* yellow value is gets captured
+  into `m_hadYellowBeforeFirstRedLeft`/`Right` — this is the only way to
+  later tell a real yellow card from the red card's side effect.
+- While that side's `red_cards > 0`, the yellow bit is ignored entirely —
+  `m_state.score.*.yellow_card` simply stops changing, frozen at whatever
+  it was right before the first red card.
+- `undoRedCard()` resolves it when a side's count reaches back to 0: if
+  there was no genuine yellow before the red card, whatever the LED is
+  *physically* showing right now needs clearing — checked against
+  `m_lastRawYellowLeft`/`Right` (the actual last-observed telemetry bit,
+  tracked unconditionally every frame), **not** the frozen reported
+  value, since that value is frozen precisely because it can't be trusted
+  to reflect physical LED state. Got this wrong on the first pass of this
+  session — initially checked the frozen value instead, which could never
+  detect a leftover physical LED that had been correctly ignored the
+  whole time. If there's something to clear, fires the
+  `setYellowClearCallback` callback for that side.
+
+**`FaveroReset` ("Mise a zero") doesn't clear a lit yellow LED or an
+active priority either — confirmed on real hardware.** `armPostResetCleanup()`
+arms a pending flag; `updateFromFavero()` waits for telemetry to actually
+confirm the reset (both scores read 0 — not a fixed delay after the IR
+command) before checking `f.yellowCardRight`/`Left` and
+`derivePriority(f)` directly (the *raw* frame, not any frozen value) and
+firing `setYellowClearCallback`/`setPriorityClearCallback` if either is
+still asserted. Priority is cleared by sending `prioMan()` — confirmed
+this is the correct way to clear an active priority on this hardware, not
+guessed. Known minor gap, not engineered around: if a new red card lands
+before the reset is confirmed, score may never return to exactly 0-0
+again this match, leaving the pending flag stuck (harmless — any later
+reset re-arms it) rather than firing spuriously.
+
+Neither of these two corrective actions (`setYellowClearCallback`/
+`setPriorityClearCallback`) can be issued by `Opp2StateOwner` itself — it
+has no `FaveroIR` dependency by design (see class comment). `main.cpp`
+wires both to the actual `FaveroIR` calls right after `g_faveroIr.begin()`.
+Called synchronously from `updateFromFavero()`, itself called synchronously
+from `loop()` (`g_decoder.feed()` → `onFaveroFrame()`), so — unlike the
+MQTT callbacks — no queue is needed; everything here is already on the
+same task.
+
+None of this (yellow/red LED sharing, reset not clearing yellow/priority,
+which IR code clears what) could be verified end-to-end this session —
+no physical Favero is wired to the bench board's GPIO13 (see "Known
+gaps"), so there was no real telemetry to exercise any of this against.
+Implemented from the user's direct hardware observations; first real
+verification happens once GPIO13 is wired to a live unit.
+
 ## Protocol boundaries (explicit user decisions, do not relitigate)
 
 - **Next/Prev never guess pool/tableau progression.** They publish

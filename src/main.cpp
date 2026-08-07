@@ -226,7 +226,8 @@ void setupWebServer() {
     addFaveroIrRoute("/FaveroPlusLeft", []() { g_faveroIr.scorePlusLeft(); });
     addFaveroIrRoute("/FaveroReset", []() {
         g_faveroIr.reset();
-        g_opp2.resetRedCards();  // "Mise a zero" -- a genuinely new bout
+        g_opp2.resetRedCards();       // "Mise a zero" -- a genuinely new bout
+        g_opp2.armPostResetCleanup(); // Mise a zero doesn't clear yellow/priority itself
     });
     addFaveroIrRoute("/FaveroPlusRight", []() { g_faveroIr.scorePlusRight(); });
     addFaveroIrRoute("/FaveroRedLeft", []() { g_faveroIr.redCardLeft(); });
@@ -376,6 +377,20 @@ void setup() {
     buildPisteId(g_settings, g_pisteId, sizeof(g_pisteId));
     g_opp2.begin(g_pisteId, &g_mqtt);
     g_faveroIr.begin();
+
+    // Corrective IR sends Opp2StateOwner can't issue itself (no FaveroIR
+    // dependency of its own -- see Opp2StateOwner.h) -- clearing a
+    // yellow-card LED left over from a red card's side effect or from
+    // FaveroReset not clearing it, and clearing an active priority that
+    // FaveroReset also doesn't clear.
+    g_opp2.setYellowClearCallback([](OPP2::Side side) {
+        if (side == OPP2::Side::LEFT) {
+            g_faveroIr.yellowCardLeft();
+        } else {
+            g_faveroIr.yellowCardRight();
+        }
+    });
+    g_opp2.setPriorityClearCallback([]() { g_faveroIr.prioMan(); });
 
     Serial2.begin(2400, SERIAL_8N1, FAVERO_RX_PIN, FAVERO_TX_PIN);
     g_decoder.setCallback(onFaveroFrame);

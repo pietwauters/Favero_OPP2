@@ -26,9 +26,26 @@
 #include "Esp32MqttClient.h"
 #include "FaveroSerialDecoder.h"
 
+using favero_ir_side_cb_t = std::function<void(OPP2::Side)>;
+using favero_ir_cb_t      = std::function<void()>;
+
 class Opp2StateOwner {
 public:
     void begin(const char* pisteId, Esp32MqttClient* mqtt);
+
+    /// Wires this bridge's "please send this IR command" callbacks --
+    /// called synchronously from updateFromFavero() (same task as
+    /// loop(), no queue needed unlike the MQTT callbacks -- see
+    /// main.cpp's loop(), which feeds the decoder directly). Needed for
+    /// two corrective actions the real Favero can't do itself: clearing
+    /// a yellow-card LED left over from a red card's side effect (see
+    /// undoRedCard()) or from FaveroReset not clearing it at all, and
+    /// clearing an active priority that FaveroReset also doesn't clear
+    /// (see armPostResetCleanup()). This class deliberately has no
+    /// FaveroIR dependency of its own -- main.cpp wires these to the
+    /// actual FaveroIR calls.
+    void setYellowClearCallback(favero_ir_side_cb_t cb);
+    void setPriorityClearCallback(favero_ir_cb_t cb);
 
     void updateFromFavero(const FaveroFrame& frame);
 
@@ -80,12 +97,25 @@ public:
     /// this method alone can't touch.
     bool undoRedCard(OPP2::Side side);
 
-    /// Clears both sides' locally-tracked red card counts -- called when
-    /// FaveroReset (Mise a zero) is pressed, and when the CMS pushes a
-    /// genuinely new match_num via handleSoftwareMatch(). A red card is
+    /// Clears both sides' locally-tracked red card counts (and the
+    /// "had yellow before first red" flags that go with them) -- called
+    /// when FaveroReset (Mise a zero) is pressed, and when the CMS pushes
+    /// a genuinely new match_num via handleSoftwareMatch(). A red card is
     /// valid for the whole match, not just one period, so nothing else
     /// resets it.
     void resetRedCards();
+
+    /// Arms the post-reset cleanup: the real Favero's Mise a zero resets
+    /// score/clock but leaves a lit yellow LED and an active priority
+    /// completely untouched. Call this (in addition to resetRedCards())
+    /// specifically when FaveroReset was just pressed -- NOT from
+    /// handleSoftwareMatch()'s CMS-driven reset, which has no physical
+    /// reset behind it to compensate for. updateFromFavero() watches for
+    /// the reset actually taking effect (both scores confirmed at 0, not
+    /// assumed after a fixed delay) and only then checks whether yellow
+    /// or priority are still asserted, firing the corresponding callback
+    /// if so.
+    void armPostResetCleanup();
 
     /// Publishes connection (LWT counterpart) -- call with true once MQTT
     /// connects, the broker publishes {"online":false} itself via LWT on
@@ -143,4 +173,30 @@ private:
     // see updateFromFavero().
     bool m_prevRedCardLeft  = false;
     bool m_prevRedCardRight = false;
+
+    // Most recently observed *raw* yellow telemetry bit per side, updated
+    // every frame regardless of whether a red card currently has it
+    // frozen -- this is the only way to know the real Favero's physical
+    // LED state while m_state.score.*.yellow_card is frozen (see
+    // updateFromFavero()). undoRedCard() needs this, not the frozen
+    // value, to know whether the LED needs clearing once the last red
+    // card for a side is undone.
+    bool m_lastRawYellowLeft  = false;
+    bool m_lastRawYellowRight = false;
+
+    // Per side: was a genuine yellow card already active the instant
+    // before that side's first currently-active red card was given?
+    // Captured once per red-card "series" (0->1 transition) in
+    // updateFromFavero(), consulted in undoRedCard() when that side's
+    // count returns to 0, to know whether the (possibly still-lit)
+    // yellow LED represents a real yellow card or just the red card's
+    // side effect.
+    bool m_hadYellowBeforeFirstRedLeft  = false;
+    bool m_hadYellowBeforeFirstRedRight = false;
+
+    // See armPostResetCleanup().
+    bool m_awaitingResetConfirmation = false;
+
+    favero_ir_side_cb_t m_onNeedYellowClear;
+    favero_ir_cb_t      m_onNeedPriorityClear;
 };

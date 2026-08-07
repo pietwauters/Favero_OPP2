@@ -18,6 +18,14 @@ void Opp2StateOwner::begin(const char* pisteId, Esp32MqttClient* mqtt) {
     m_state.match.phase_type = OPP2::PhaseType::DE;
 }
 
+void Opp2StateOwner::setYellowClearCallback(favero_ir_side_cb_t cb) {
+    m_onNeedYellowClear = std::move(cb);
+}
+
+void Opp2StateOwner::setPriorityClearCallback(favero_ir_cb_t cb) {
+    m_onNeedPriorityClear = std::move(cb);
+}
+
 void Opp2StateOwner::publish(OPP2::Publisher pub, OPP2::MessageType mt,
                               const char* json, int qos, bool retained) {
     if (!m_mqtt) return;
@@ -38,36 +46,75 @@ void Opp2StateOwner::updateFromFavero(const FaveroFrame& f) {
     const bool hitScored =
         m_state.score.right.score != f.rightScore || m_state.score.left.score != f.leftScore;
 
-    // Red cards: the Favero's own bit is transient -- it flashes true for
-    // a frame or two when a card is given and then reverts to false on
-    // its own, even though the card (and the point it awards the
+    // Red cards: the Favero's own red bit is transient -- it flashes true
+    // for a frame or two when a card is given and then reverts to false
+    // on its own, even though the card (and the point it awards the
     // opponent) remains valid for the rest of the match. The Favero has
     // no memory of an already-given card and no way to un-give one, so
     // this is detected here as a rising edge and accumulated locally
     // instead of mirrored directly from the live bit -- see
     // undoRedCard()/resetRedCards() for the two ways this count changes
     // outside of a Favero frame.
+    //
+    // Giving a red card also has a side effect confirmed on real
+    // hardware: it lights the *yellow* LED, since the Favero has no
+    // separate red LED at all. So while a side has >=1 active red card,
+    // its yellow telemetry bit is ambiguous (shared with that side
+    // effect) and must not be trusted -- captured once, right before the
+    // first red card of a "series" lands, so undoRedCard() can tell a
+    // real yellow card from a red card's side effect once it undoes the
+    // last one.
     const bool redRightGiven = f.redCardRight && !m_prevRedCardRight;
     const bool redLeftGiven  = f.redCardLeft && !m_prevRedCardLeft;
     m_prevRedCardRight = f.redCardRight;
     m_prevRedCardLeft  = f.redCardLeft;
+    if (redRightGiven && m_state.score.right.red_cards == 0) {
+        m_hadYellowBeforeFirstRedRight = m_state.score.right.yellow_card;
+    }
+    if (redLeftGiven && m_state.score.left.red_cards == 0) {
+        m_hadYellowBeforeFirstRedLeft = m_state.score.left.yellow_card;
+    }
     if (redRightGiven && m_state.score.right.red_cards < 9) ++m_state.score.right.red_cards;
     if (redLeftGiven && m_state.score.left.red_cards < 9) ++m_state.score.left.red_cards;
 
-    const bool scoreChanged =
-        hitScored ||
-        m_state.score.right.yellow_card != f.yellowCardRight ||
-        m_state.score.left.yellow_card != f.yellowCardLeft ||
-        redRightGiven || redLeftGiven ||
-        m_state.score.priority != prio;
+    // Yellow: live-mirrored as normal, unless a red card is currently
+    // active for that side (see above), in which case the bit is ignored
+    // entirely -- the reported value simply stays whatever it was right
+    // before that side's first red card, until undoRedCard() resolves it.
+    const bool yellowRightLive = m_state.score.right.red_cards == 0;
+    const bool yellowLeftLive  = m_state.score.left.red_cards == 0;
+    const bool yellowRightChanged =
+        yellowRightLive && m_state.score.right.yellow_card != f.yellowCardRight;
+    const bool yellowLeftChanged =
+        yellowLeftLive && m_state.score.left.yellow_card != f.yellowCardLeft;
+    m_lastRawYellowRight = f.yellowCardRight;
+    m_lastRawYellowLeft  = f.yellowCardLeft;
+
+    const bool scoreChanged = hitScored || yellowRightChanged || yellowLeftChanged ||
+                              redRightGiven || redLeftGiven || m_state.score.priority != prio;
 
     if (scoreChanged) {
         m_state.score.right.score = f.rightScore;
         m_state.score.left.score = f.leftScore;
-        m_state.score.right.yellow_card = f.yellowCardRight;
-        m_state.score.left.yellow_card = f.yellowCardLeft;
+        if (yellowRightLive) m_state.score.right.yellow_card = f.yellowCardRight;
+        if (yellowLeftLive) m_state.score.left.yellow_card = f.yellowCardLeft;
         m_state.score.priority = prio;
         publishScore();
+    }
+
+    // ── Post-reset cleanup ───────────────────────────────────────────────
+    // The real Favero's Mise a zero resets score/clock but leaves a lit
+    // yellow LED and an active priority completely untouched -- confirmed
+    // here once telemetry shows the reset actually took effect (both
+    // scores read 0), not assumed after some fixed delay following the
+    // IR command. See armPostResetCleanup().
+    if (m_awaitingResetConfirmation && f.rightScore == 0 && f.leftScore == 0) {
+        m_awaitingResetConfirmation = false;
+        if (m_onNeedYellowClear) {
+            if (f.yellowCardRight) m_onNeedYellowClear(OPP2::Side::RIGHT);
+            if (f.yellowCardLeft) m_onNeedYellowClear(OPP2::Side::LEFT);
+        }
+        if (prio != OPP2::Priority::NONE && m_onNeedPriorityClear) m_onNeedPriorityClear();
     }
 
     // ── Clock ────────────────────────────────────────────────────────────
@@ -165,20 +212,45 @@ void Opp2StateOwner::handleSoftwareMatch(const OPP2::Match& match) {
 }
 
 bool Opp2StateOwner::undoRedCard(OPP2::Side side) {
-    uint8_t& count =
-        (side == OPP2::Side::LEFT) ? m_state.score.left.red_cards : m_state.score.right.red_cards;
+    const bool isLeft = side == OPP2::Side::LEFT;
+    uint8_t& count = isLeft ? m_state.score.left.red_cards : m_state.score.right.red_cards;
     if (count == 0) return false;
     --count;
+
+    if (count == 0) {
+        // Last red card for this side undone -- resume trusting live
+        // yellow telemetry on the next frame (see updateFromFavero()).
+        // m_state.score.*.yellow_card has been frozen since this side's
+        // first red card, so it already correctly reflects whether a
+        // genuine yellow card exists -- but it can't tell us the
+        // *physical* LED state, which may still be lit purely as that
+        // red card's side effect. Checked here against the last actually
+        // observed telemetry bit instead, and cleared on the real Favero
+        // (via the caller-wired callback) if it's lit for no genuine
+        // reason.
+        bool& hadYellowBefore =
+            isLeft ? m_hadYellowBeforeFirstRedLeft : m_hadYellowBeforeFirstRedRight;
+        const bool ledLit = isLeft ? m_lastRawYellowLeft : m_lastRawYellowRight;
+        if (!hadYellowBefore && ledLit && m_onNeedYellowClear) {
+            m_onNeedYellowClear(side);
+        }
+        hadYellowBefore = false;
+    }
+
     publishScore();
     return true;
 }
 
 void Opp2StateOwner::resetRedCards() {
+    m_hadYellowBeforeFirstRedLeft  = false;
+    m_hadYellowBeforeFirstRedRight = false;
     if (m_state.score.left.red_cards == 0 && m_state.score.right.red_cards == 0) return;
     m_state.score.left.red_cards  = 0;
     m_state.score.right.red_cards = 0;
     publishScore();
 }
+
+void Opp2StateOwner::armPostResetCleanup() { m_awaitingResetConfirmation = true; }
 
 void Opp2StateOwner::handleSoftwareFencers(const OPP2::Fencers& fencers) {
     m_state.fencers = fencers;
