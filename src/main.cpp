@@ -224,11 +224,26 @@ void setupWebServer() {
     addFaveroIrRoute("/FaveroRearm", []() { g_faveroIr.rearm(); });
     addFaveroIrRoute("/FaveroPause", []() { g_faveroIr.pause(); });
     addFaveroIrRoute("/FaveroPlusLeft", []() { g_faveroIr.scorePlusLeft(); });
-    addFaveroIrRoute("/FaveroReset", []() { g_faveroIr.reset(); });
+    addFaveroIrRoute("/FaveroReset", []() {
+        g_faveroIr.reset();
+        g_opp2.resetRedCards();  // "Mise a zero" -- a genuinely new bout
+    });
     addFaveroIrRoute("/FaveroPlusRight", []() { g_faveroIr.scorePlusRight(); });
     addFaveroIrRoute("/FaveroRedLeft", []() { g_faveroIr.redCardLeft(); });
     addFaveroIrRoute("/FaveroSet", []() { g_faveroIr.set(); });
     addFaveroIrRoute("/FaveroRedRight", []() { g_faveroIr.redCardRight(); });
+    // Undo a mistakenly-given red card -- no equivalent button exists on
+    // the real Favero remote at all (it can't un-give a card), so this is
+    // purely a bridge-side correction: decrement the local count for the
+    // carded side, and if there was actually one to undo, decrement the
+    // *opposite* side's score via the same IR command the Minus buttons
+    // already use, since a red card awarded that side a point.
+    addFaveroIrRoute("/FaveroUndoRedLeft", []() {
+        if (g_opp2.undoRedCard(OPP2::Side::LEFT)) g_faveroIr.scoreMinusRight();
+    });
+    addFaveroIrRoute("/FaveroUndoRedRight", []() {
+        if (g_opp2.undoRedCard(OPP2::Side::RIGHT)) g_faveroIr.scoreMinusLeft();
+    });
     addFaveroIrRoute("/FaveroYellowLeft", []() { g_faveroIr.yellowCardLeft(); });
     addFaveroIrRoute("/FaveroMatchCount", []() { g_faveroIr.matchCount(); });
     addFaveroIrRoute("/FaveroYellowRight", []() { g_faveroIr.yellowCardRight(); });

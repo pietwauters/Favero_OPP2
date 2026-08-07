@@ -69,6 +69,24 @@ public:
     void handleSoftwareMatch(const OPP2::Match& match);
     void handleSoftwareFencers(const OPP2::Fencers& fencers);
 
+    /// Undoes a mistakenly-given red card on `side`: decrements that
+    /// side's locally-tracked red card count (never below 0) and returns
+    /// true if there was one to undo. The Favero itself has no "remove
+    /// card" command and no memory of a card once its telemetry bit
+    /// clears (see updateFromFavero()), so this is purely a bridge-side
+    /// correction -- the caller is responsible for also telling the real
+    /// Favero to decrement the *opposite* side's score via IR when this
+    /// returns true, since a red card awards the opponent a point that
+    /// this method alone can't touch.
+    bool undoRedCard(OPP2::Side side);
+
+    /// Clears both sides' locally-tracked red card counts -- called when
+    /// FaveroReset (Mise a zero) is pressed, and when the CMS pushes a
+    /// genuinely new match_num via handleSoftwareMatch(). A red card is
+    /// valid for the whole match, not just one period, so nothing else
+    /// resets it.
+    void resetRedCards();
+
     /// Publishes connection (LWT counterpart) -- call with true once MQTT
     /// connects, the broker publishes {"online":false} itself via LWT on
     /// unexpected disconnect.
@@ -118,4 +136,11 @@ private:
     uint32_t m_uw2fBaseMs     = 0;      // banked elapsed ms from prior running segments
     uint32_t m_uw2fRunSinceMs = 0;      // millis() when the current running segment started
     bool     m_uw2fRunning    = false;  // running state as of the last tick
+
+    // Previous frame's raw Favero red-card bits, to detect a false->true
+    // edge (a card being given) independently of m_state.score.*.red_cards,
+    // which is now a persistent accumulator decoupled from the live bit --
+    // see updateFromFavero().
+    bool m_prevRedCardLeft  = false;
+    bool m_prevRedCardRight = false;
 };

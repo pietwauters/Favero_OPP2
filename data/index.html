@@ -28,9 +28,9 @@
     <div class="grid-item"><button class="button buttonred" onclick="faveroAction('/FaveroReset')">Mise <br/>a zero</button></div>
     <div class="grid-item"><button class="button buttonredshorttext" onclick="faveroAction('/FaveroPlusRight')">+</button></div>
 
-    <div class="grid-item"><button class="button buttonred buttoncard" onclick="faveroAction('/FaveroRedLeft')">Red<br/>Card</button></div>
+    <div class="grid-item"><button id="btnRedLeft" class="button buttonred buttoncard">Red<br/>Card</button></div>
     <div class="grid-item"><button class="button buttongreen" onclick="faveroAction('/FaveroSet')">Set </button></div>
-    <div class="grid-item"><button class="button buttonred buttoncard" onclick="faveroAction('/FaveroRedRight')">Red<br/>Card</button></div>
+    <div class="grid-item"><button id="btnRedRight" class="button buttonred buttoncard">Red<br/>Card</button></div>
 
     <div class="grid-item"><button class="button buttonyellow buttoncard" onclick="faveroAction('/FaveroYellowLeft')">Yellow<br/>Card</button></div>
     <div class="grid-item"><button class="button" onclick="faveroAction('/FaveroMatchCount')">Match<br/>Count</button></div>
@@ -296,16 +296,54 @@
         // No audio feedback available either -- silently do nothing.
       }
     }
-    function feedback() {
-      if (navigator.vibrate && navigator.vibrate(100)) return;
+    function feedback(ms) {
+      ms = ms || 100;
+      if (navigator.vibrate && navigator.vibrate(ms)) return;
       beep();
     }
 
     // ── Remote view ──────────────────────────────────────────────────────
-    function faveroAction(url) {
-      feedback();
+    function faveroAction(url, feedbackMs) {
+      feedback(feedbackMs);
       fetch(url);
     }
+
+    // Long-press support for the Red Card buttons: short press gives a
+    // card (normal faveroAction), long press undoes one. There's no
+    // "remove card" button on the real Favero remote at all -- the
+    // undo only exists here, correcting this bridge's own locally-tracked
+    // count and the score, since the Favero can't un-give a card itself
+    // (see main.cpp's /FaveroUndoRedLeft|Right). Longer, distinct
+    // feedback (200ms vs the usual 100ms) on the undo so it's clear
+    // something different just happened.
+    function bindRedCardButton(el, side) {
+      const LONG_PRESS_MS = 500;
+      let timer = null;
+      let firedLong = false;
+
+      function start() {
+        firedLong = false;
+        timer = setTimeout(function () {
+          firedLong = true;
+          faveroAction('/FaveroUndoRed' + side, 200);
+        }, LONG_PRESS_MS);
+      }
+      function cancel() {
+        if (timer) { clearTimeout(timer); timer = null; }
+      }
+      function end() {
+        cancel();
+        if (!firedLong) faveroAction('/FaveroRed' + side);
+      }
+
+      el.addEventListener('pointerdown', start);
+      el.addEventListener('pointerup', end);
+      el.addEventListener('pointercancel', cancel);
+      el.addEventListener('pointerleave', cancel);
+      el.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+    }
+    bindRedCardButton(document.getElementById('btnRedLeft'), 'Left');
+    bindRedCardButton(document.getElementById('btnRedRight'), 'Right');
 
     // ── Shared live-state polling (Repeater + OPP2 views) ───────────────
     const APPARATUS_STATE = ["Fencing", "Halt", "Pause", "Waiting", "Ending", "Unknown"];

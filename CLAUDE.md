@@ -243,6 +243,52 @@ spec text prints `0x56`; every other field in that example checks out).
 Implemented per the stated rule. First thing to check if real frames ever
 fail checksum validation once GPIO13 is wired to a live Favero.
 
+## Red cards: the Favero's bit is transient, this bridge's count isn't
+
+Confirmed by observation (2026-08-07): the Favero's red-card telemetry
+bit flashes true for a frame or two when a card is given, then reverts to
+false on its own — even though the card, and the point it awards the
+opponent, remains valid for the rest of the match. The Favero has no
+memory of an already-given card and no way to un-give one at all (no such
+IR command exists). `Opp2StateOwner::updateFromFavero()` used to mirror
+the live bit directly into `OPP2::ScoreState.red_cards` (lossy anyway —
+that field is a real 0–9 count, the old code only ever wrote 0 or 1) —
+this dropped every card the instant the Favero's own bit cleared.
+
+Now: a false→true edge on the raw bit (tracked via
+`m_prevRedCardLeft`/`m_prevRedCardRight`, independent of the accumulated
+count) increments a persistent per-side counter that survives the bit
+clearing. Two things clear it back to 0, matching fencing rules (a card
+is valid for the whole match, not one period):
+- `FaveroReset` ("Mise a zero") — `Opp2StateOwner::resetRedCards()`,
+  called from that route in `main.cpp`.
+- A genuinely new match from the CMS — `handleSoftwareMatch()` compares
+  incoming `match_num` against the current one before resetting, so a
+  retained-message redelivery or a same-match correction (e.g. fencer
+  name fix) doesn't wrongly wipe a still-valid card.
+
+**Undo (long-press) exists only in this bridge, not on the real
+apparatus.** Since the Favero can't un-give a card, `/FaveroUndoRedLeft`/
+`/FaveroUndoRedRight` (`main.cpp`) decrement the local count for that
+side via `Opp2StateOwner::undoRedCard()` (never below 0) and, *only if
+there was actually a card to undo*, send the existing
+`scoreMinus{Left,Right}()` IR command for the **opposite** side — a red
+card awards the opponent a point, so undoing it must also undo that
+point. The guard (don't touch the score if the count was already 0)
+was a deliberate choice: a stray long-press after the count's already at
+0 does nothing at all, rather than silently knocking a point off a real
+fencer's score with no way to detect it happened by mistake. This
+inherits the project's general IR limitation (no feedback path) — if the
+score-minus IR command is dropped, the local count still decremented but
+the physical scoreboard didn't; nothing new here, every IR-based action
+in this project has the same gap.
+
+Long-press is implemented client-side only (`data/index.html`,
+`bindRedCardButton()`, pointerdown/pointerup timing, 500ms threshold) —
+short tap gives a card as before, holding past the threshold undoes one
+instead, with a longer/distinct vibration (200ms vs the usual 100ms) so
+it's obvious something different just happened.
+
 ## Protocol boundaries (explicit user decisions, do not relitigate)
 
 - **Next/Prev never guess pool/tableau progression.** They publish

@@ -34,19 +34,31 @@ OPP2::Priority Opp2StateOwner::derivePriority(const FaveroFrame& f) {
 
 void Opp2StateOwner::updateFromFavero(const FaveroFrame& f) {
     // ── Score, cards, priority ──────────────────────────────────────────
-    // Favero only gives a boolean "red card present" bit, not a count --
-    // OPP2::ScoreState.red_cards is a 0-9 count, so this mapping is
-    // lossy (any red card shows as 1, never more). No way around that
-    // with what the data port provides.
     const OPP2::Priority prio = derivePriority(f);
     const bool hitScored =
         m_state.score.right.score != f.rightScore || m_state.score.left.score != f.leftScore;
+
+    // Red cards: the Favero's own bit is transient -- it flashes true for
+    // a frame or two when a card is given and then reverts to false on
+    // its own, even though the card (and the point it awards the
+    // opponent) remains valid for the rest of the match. The Favero has
+    // no memory of an already-given card and no way to un-give one, so
+    // this is detected here as a rising edge and accumulated locally
+    // instead of mirrored directly from the live bit -- see
+    // undoRedCard()/resetRedCards() for the two ways this count changes
+    // outside of a Favero frame.
+    const bool redRightGiven = f.redCardRight && !m_prevRedCardRight;
+    const bool redLeftGiven  = f.redCardLeft && !m_prevRedCardLeft;
+    m_prevRedCardRight = f.redCardRight;
+    m_prevRedCardLeft  = f.redCardLeft;
+    if (redRightGiven && m_state.score.right.red_cards < 9) ++m_state.score.right.red_cards;
+    if (redLeftGiven && m_state.score.left.red_cards < 9) ++m_state.score.left.red_cards;
+
     const bool scoreChanged =
         hitScored ||
         m_state.score.right.yellow_card != f.yellowCardRight ||
         m_state.score.left.yellow_card != f.yellowCardLeft ||
-        (m_state.score.right.red_cards > 0) != f.redCardRight ||
-        (m_state.score.left.red_cards > 0) != f.redCardLeft ||
+        redRightGiven || redLeftGiven ||
         m_state.score.priority != prio;
 
     if (scoreChanged) {
@@ -54,8 +66,6 @@ void Opp2StateOwner::updateFromFavero(const FaveroFrame& f) {
         m_state.score.left.score = f.leftScore;
         m_state.score.right.yellow_card = f.yellowCardRight;
         m_state.score.left.yellow_card = f.yellowCardLeft;
-        m_state.score.right.red_cards = f.redCardRight ? 1 : 0;
-        m_state.score.left.red_cards = f.redCardLeft ? 1 : 0;
         m_state.score.priority = prio;
         publishScore();
     }
@@ -143,8 +153,31 @@ void Opp2StateOwner::handleSoftwareControl(const OPP2::Control& control) {
 }
 
 void Opp2StateOwner::handleSoftwareMatch(const OPP2::Match& match) {
+    // Only a genuinely new match_num resets red cards -- the CMS may
+    // re-publish the same match's data for unrelated reasons (e.g. a
+    // retained message redelivered on reconnect, a fencer-name
+    // correction), and that must not wipe a still-valid card.
+    if (match.match_num != m_state.match.match_num) {
+        resetRedCards();
+    }
     m_state.match = match;
     publishMatch();  // relay under apparatus/match -- see handleSoftwareFencers
+}
+
+bool Opp2StateOwner::undoRedCard(OPP2::Side side) {
+    uint8_t& count =
+        (side == OPP2::Side::LEFT) ? m_state.score.left.red_cards : m_state.score.right.red_cards;
+    if (count == 0) return false;
+    --count;
+    publishScore();
+    return true;
+}
+
+void Opp2StateOwner::resetRedCards() {
+    if (m_state.score.left.red_cards == 0 && m_state.score.right.red_cards == 0) return;
+    m_state.score.left.red_cards  = 0;
+    m_state.score.right.red_cards = 0;
+    publishScore();
 }
 
 void Opp2StateOwner::handleSoftwareFencers(const OPP2::Fencers& fencers) {
