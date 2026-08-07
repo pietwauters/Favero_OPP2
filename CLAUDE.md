@@ -352,11 +352,35 @@ MQTT callbacks — no queue is needed; everything here is already on the
 same task.
 
 None of this (yellow/red LED sharing, reset not clearing yellow/priority,
-which IR code clears what) could be verified end-to-end this session —
-no physical Favero is wired to the bench board's GPIO13 (see "Known
-gaps"), so there was no real telemetry to exercise any of this against.
-Implemented from the user's direct hardware observations; first real
-verification happens once GPIO13 is wired to a live unit.
+which IR code clears what) could be verified end-to-end when first
+written — no physical Favero was wired to the bench board's GPIO13 yet
+(see "Known gaps"). It has since been wired to a real unit and tested;
+see the retry mechanism below, added in response to real-hardware
+behavior the first pass didn't account for.
+
+**Corrective IR sends aren't guaranteed to land on the first try —
+confirmed on real hardware (2026-08-08): "the reset doesn't always clear
+the yellow card."** Each `FaveroIR` call already sends 3 repeats
+internally (see `FaveroIR.cpp`), but that's no guarantee either if
+conditions are bad for that whole ~50ms window (line-of-sight, ambient IR
+interference — the same no-feedback-path limitation as every other IR
+action in this project). `armYellowClear()`/`armPriorityClear()` +
+`driveYellowClearRetry()`/`drivePriorityClearRetry()` (`Opp2StateOwner`)
+add a second, higher-level retry layer: once armed, every subsequent
+telemetry frame is checked against the *live* bit (never a frozen or
+previously-observed value) — resolved the moment it's confirmed cleared,
+otherwise re-sent at `kIrRetryIntervalMs` (700ms) up to `kIrMaxAttempts`
+(5) before giving up and leaving it for the referee to clear manually.
+
+The 700ms interval is deliberately longer than a single logical press's
+own realistic round-trip (send → Favero processes → next telemetry frame
+reflects it) for a specific reason: yellow-clearing works by sending the
+same *toggle* command that originally lit it. If a retry fired before an
+earlier attempt's effect had been reflected in telemetry yet, it would
+toggle the LED back **on**, undoing its own fix. The interval is a
+judgment call, not measured against real latency data — worth shortening
+only with actual evidence it's overly conservative, not by assumption,
+given what double-toggling would do.
 
 ## Protocol boundaries (explicit user decisions, do not relitigate)
 

@@ -110,12 +110,17 @@ void Opp2StateOwner::updateFromFavero(const FaveroFrame& f) {
     // IR command. See armPostResetCleanup().
     if (m_awaitingResetConfirmation && f.rightScore == 0 && f.leftScore == 0) {
         m_awaitingResetConfirmation = false;
-        if (m_onNeedYellowClear) {
-            if (f.yellowCardRight) m_onNeedYellowClear(OPP2::Side::RIGHT);
-            if (f.yellowCardLeft) m_onNeedYellowClear(OPP2::Side::LEFT);
-        }
-        if (prio != OPP2::Priority::NONE && m_onNeedPriorityClear) m_onNeedPriorityClear();
+        if (f.yellowCardRight) armYellowClear(OPP2::Side::RIGHT);
+        if (f.yellowCardLeft) armYellowClear(OPP2::Side::LEFT);
+        if (prio != OPP2::Priority::NONE) armPriorityClear();
     }
+
+    // Drive any pending corrective sends against this frame's live
+    // telemetry -- resolves as soon as confirmed cleared, otherwise
+    // retries at kIrRetryIntervalMs. See PendingIrRetry.
+    driveYellowClearRetry(OPP2::Side::LEFT, f.yellowCardLeft);
+    driveYellowClearRetry(OPP2::Side::RIGHT, f.yellowCardRight);
+    drivePriorityClearRetry(prio != OPP2::Priority::NONE);
 
     // ── Clock ────────────────────────────────────────────────────────────
     const uint32_t time_ms =
@@ -231,8 +236,8 @@ bool Opp2StateOwner::undoRedCard(OPP2::Side side) {
         bool& hadYellowBefore =
             isLeft ? m_hadYellowBeforeFirstRedLeft : m_hadYellowBeforeFirstRedRight;
         const bool ledLit = isLeft ? m_lastRawYellowLeft : m_lastRawYellowRight;
-        if (!hadYellowBefore && ledLit && m_onNeedYellowClear) {
-            m_onNeedYellowClear(side);
+        if (!hadYellowBefore && ledLit) {
+            armYellowClear(side);
         }
         hadYellowBefore = false;
     }
@@ -251,6 +256,58 @@ void Opp2StateOwner::resetRedCards() {
 }
 
 void Opp2StateOwner::armPostResetCleanup() { m_awaitingResetConfirmation = true; }
+
+void Opp2StateOwner::armYellowClear(OPP2::Side side) {
+    PendingIrRetry& retry =
+        (side == OPP2::Side::LEFT) ? m_yellowClearRetryLeft : m_yellowClearRetryRight;
+    retry = PendingIrRetry{};
+    retry.armed = true;  // nextRetryAtMs stays 0 -- driveYellowClearRetry() fires immediately
+}
+
+void Opp2StateOwner::armPriorityClear() {
+    m_priorityClearRetry = PendingIrRetry{};
+    m_priorityClearRetry.armed = true;
+}
+
+// currentlyLit/currentlyAsserted always reflect this frame's live
+// telemetry directly (never a frozen value) -- that's the whole point:
+// confirm the corrective IR send actually took effect before declaring
+// it resolved, and retry (bounded) if it didn't.
+void Opp2StateOwner::driveYellowClearRetry(OPP2::Side side, bool currentlyLit) {
+    PendingIrRetry& retry =
+        (side == OPP2::Side::LEFT) ? m_yellowClearRetryLeft : m_yellowClearRetryRight;
+    if (!retry.armed) return;
+    if (!currentlyLit) {
+        retry = PendingIrRetry{};  // confirmed cleared
+        return;
+    }
+    const uint32_t now = millis();
+    if (now < retry.nextRetryAtMs) return;
+    if (retry.attempts >= kIrMaxAttempts) {
+        retry.armed = false;  // give up -- referee can still clear it manually
+        return;
+    }
+    ++retry.attempts;
+    retry.nextRetryAtMs = now + kIrRetryIntervalMs;
+    if (m_onNeedYellowClear) m_onNeedYellowClear(side);
+}
+
+void Opp2StateOwner::drivePriorityClearRetry(bool currentlyAsserted) {
+    if (!m_priorityClearRetry.armed) return;
+    if (!currentlyAsserted) {
+        m_priorityClearRetry = PendingIrRetry{};
+        return;
+    }
+    const uint32_t now = millis();
+    if (now < m_priorityClearRetry.nextRetryAtMs) return;
+    if (m_priorityClearRetry.attempts >= kIrMaxAttempts) {
+        m_priorityClearRetry.armed = false;
+        return;
+    }
+    ++m_priorityClearRetry.attempts;
+    m_priorityClearRetry.nextRetryAtMs = now + kIrRetryIntervalMs;
+    if (m_onNeedPriorityClear) m_onNeedPriorityClear();
+}
 
 void Opp2StateOwner::handleSoftwareFencers(const OPP2::Fencers& fencers) {
     m_state.fencers = fencers;

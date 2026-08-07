@@ -154,6 +154,29 @@ private:
     static OPP2::Priority derivePriority(const FaveroFrame& f);
     static bool checkSerialize(OPP2::SerializeError err, const char* what);
 
+    /// IR has no feedback path (project-wide limitation), so a corrective
+    /// send (clearing a stuck yellow LED or priority) isn't guaranteed to
+    /// land on the first try -- confirmed by observation (2026-08-08: "the
+    /// reset doesn't always clear the yellow card"). Armed once, then
+    /// driven every frame against live telemetry: resolved as soon as the
+    /// condition is confirmed cleared, otherwise re-sent at
+    /// kIrRetryIntervalMs (deliberately longer than a single logical
+    /// press's own realistic round-trip, so a not-yet-reflected earlier
+    /// attempt doesn't get double-toggled back on by an over-eager retry)
+    /// up to kIrMaxAttempts before giving up.
+    struct PendingIrRetry {
+        bool     armed    = false;
+        uint8_t  attempts = 0;
+        uint32_t nextRetryAtMs = 0;
+    };
+    static constexpr uint32_t kIrRetryIntervalMs = 700;
+    static constexpr uint8_t  kIrMaxAttempts     = 5;
+
+    void armYellowClear(OPP2::Side side);
+    void armPriorityClear();
+    void driveYellowClearRetry(OPP2::Side side, bool currentlyLit);
+    void drivePriorityClearRetry(bool currentlyAsserted);
+
     Esp32MqttClient* m_mqtt = nullptr;
     uint32_t         m_seq  = 0;
 
@@ -199,4 +222,9 @@ private:
 
     favero_ir_side_cb_t m_onNeedYellowClear;
     favero_ir_cb_t      m_onNeedPriorityClear;
+
+    // See PendingIrRetry above.
+    PendingIrRetry m_yellowClearRetryLeft;
+    PendingIrRetry m_yellowClearRetryRight;
+    PendingIrRetry m_priorityClearRetry;
 };
