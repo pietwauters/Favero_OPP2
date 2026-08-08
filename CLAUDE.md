@@ -78,6 +78,17 @@ ESP-IDF 4.4.6 — every one confirmed by a real failure, not precaution:
   regardless of `-DSEND_FAVERO`. Using `partitions.csv` (copied from
   arduino-esp32's `huge_app.csv`) — trades away the OTA slot for a ~3MB app
   partition. OTA isn't implemented, so this is free for now, not free later.
+- **`data/*` (the whole web UI) is a separate flash step from firmware.**
+  `pio run -t upload` only writes `firmware.bin` to the `app0` partition
+  — SPIFFS lives in its own `spiffs` partition and needs `pio run -t
+  uploadfs` separately. Confirmed by real confusion mid-session
+  (2026-08-08): after flashing `index.html` changes with plain `upload`,
+  the board kept serving the old page with zero indication anything was
+  wrong (no error, just stale content) until `uploadfs` was actually run.
+  Any `data/` change needs both steps; a `src/` change needs only
+  `upload`. `uploadfs` also needs the serial port free (check `lsof
+  /dev/ttyUSB0` first) — it and a running `pio device monitor`/upload
+  can't share the port.
 
 ## Web server: library choice and route order both matter
 
@@ -506,8 +517,8 @@ selected.
 
 - **Three `.remote-layout` divs, one `<section>`.** `#remoteClassic`
   (the existing grid), `#remoteCompactMain` (score/clock/round,
-  start/stop, +/-, reset), `#remoteCompactPenalties` (cards, priority,
-  UW2F) all live inside the same `<section id="view-remote">` — no new
+  Start/Stop, Reset), `#remoteCompactPenalties` (cards, priority, UW2F)
+  all live inside the same `<section id="view-remote">` — no new
   files/routes for markup, same "one page" reasoning as above.
   `renderRemoteLayout()` (`index.html`) shows exactly one, based on
   `activeRemoteLayout` (fetched once from `/api/settings-info` at page
@@ -515,6 +526,59 @@ selected.
   id="remoteLayout">`, which only changes what gets *saved*, not what's
   live in this page load) and, when compact, `compactSubView`
   ('main'/'penalties').
+- **Visual design deliberately mirrors the Atlas app**, not just its
+  button mapping — pulled `colors.xml` (navy `#17375E` button
+  background, white text, score `#E91E63` left / `#4CAF50` right) and
+  its `activity_main.xml`/`activity_penalties.xml` ConstraintLayout
+  relationships (score/timer row, +/- under each score, wide Start/Stop,
+  full-width Reset at the bottom). New `atlas-*` CSS classes
+  (`style.css`), deliberately separate from the classic grid's circular
+  red/yellow/green `.button` — rounded-rectangle Material-style buttons,
+  matching the Android app's actual shape, per explicit request.
+- **On the compact Main screen, the score number itself is the +/-
+  control** (`btnScoreLeft`/`btnScoreRight`, tap = point, long-press =
+  undo, via `bindLongPress()`) — not separate buttons, freeing vertical
+  space for Start/Stop specifically because a referee needs to hit that
+  one confidently without looking, per explicit request. Small `+`/`-`
+  buttons (`.atlas-pm-mini`) exist alongside the score too, but only as
+  an *added* convenience behind `@media (min-height: 700px)` — the score
+  tap/long-press always works regardless of screen size; the buttons are
+  never the only way to do it. 700px is a judgment call from exactly two
+  real devices (an iPhone clears it, a very old Android doesn't) — worth
+  revisiting with more data, not more assumption.
+- **Fullscreen hides `<nav>` entirely** (`body.is-fullscreen nav {
+  display: none }`, toggled from the existing `fullscreenchange`
+  listener that already updated the Fullscreen button's label) — a
+  referee running the compact layout has no use for the
+  Remote/Repeater/OPP2/Settings/Fullscreen bar, and that's real vertical
+  space `.atlas-btn-hero` (below) can use instead. Reuses the existing
+  Fullscreen button as the only way in/out rather than adding a second
+  control. Only works where the Fullscreen API actually works (the
+  existing iOS Safari gap noted above still applies — confirmed
+  2026-08-08 an iPhone has enough room without this anyway; the intended
+  beneficiary is exactly the kind of older/smaller Android device where
+  Fullscreen generally *does* work).
+- **`.atlas-panel-main` fills the real viewport height as a flex
+  column**, so Start/Stop (`.atlas-btn-hero`, `flex: 1 1 auto`) claims
+  whatever space is left after the score row — same markup adapts to any
+  screen instead of one fixed size being wrong on either a short old
+  Android or a tall iPhone. Two real bugs found via actual device
+  screenshots (2026-08-08), not assumed:
+  - `min-height: 100dvh` alone silently no-ops on browsers that don't
+    parse `dvh` at all (a very old Android's stock/WebView browser,
+    confirmed) — CSS drops the whole malformed-unit declaration, so the
+    panel never stretched and Start/Stop just sized to its content,
+    leaving dead black space below on that device. Fixed with
+    `min-height: 100vh` declared *first* as a fallback, `100dvh` second
+    to override where actually supported — standard graceful-degradation
+    order, not a random duplicate.
+  - Unbounded `flex: 1` made Start/Stop swallow the *entire* leftover
+    viewport on a tall screen (iPhone) — technically correct, clearly
+    too big in practice. Capped with `max-height: 320px` +
+    `min-height: 140px`; once capped, `.atlas-panel-main`'s
+    `justify-content: center` takes over and vertically balances the
+    whole button group in whatever room is actually left, rather than
+    everything sticking to the top with dead space below.
 - **`leftScore`/`rightScore`/`clock` converted from ids to classes** so
   the compact Main screen can show the same live values the Repeater
   view already does — the same id→class dedup this file already
