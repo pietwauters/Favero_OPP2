@@ -80,6 +80,7 @@
       <div class="status-line">
         State: <span class="apparatusState">--</span> &nbsp;|&nbsp;
         Match #<span class="matchNum">--</span> &nbsp;|&nbsp;
+        Round <span class="round">--</span> &nbsp;|&nbsp;
         Weapon: <span class="weapon">--</span>
       </div>
 
@@ -93,6 +94,7 @@
       <div class="status-line">
         State: <span class="apparatusState">--</span> &nbsp;|&nbsp;
         Match #<span class="matchNum">--</span> &nbsp;|&nbsp;
+        Round <span class="round">--</span> &nbsp;|&nbsp;
         Weapon: <span class="weapon">--</span>
       </div>
 
@@ -388,6 +390,7 @@
         // Shared between Repeater and OPP2 views
         setText('apparatusState', APPARATUS_STATE[s.apparatus_state] || '?');
         setText('matchNum', s.match_num);
+        setText('round', s.round);
         setText('weapon', WEAPON[s.weapon] || '?');
         setText('leftCurrent', s.left.name ? (s.left.name + (s.left.noc ? ' (' + s.left.noc + ')' : '')) : '--');
         setText('rightCurrent', s.right.name ? (s.right.name + (s.right.noc ? ' (' + s.right.noc + ')' : '')) : '--');

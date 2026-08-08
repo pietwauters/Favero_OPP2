@@ -122,6 +122,19 @@ void Opp2StateOwner::updateFromFavero(const FaveroFrame& f) {
     driveYellowClearRetry(OPP2::Side::RIGHT, f.yellowCardRight);
     drivePriorityClearRetry(prio != OPP2::Priority::NONE);
 
+    // ── Round ────────────────────────────────────────────────────────────
+    // numMatches (byte 6, D0-D1) genuinely tracks the bout's period --
+    // confirmed on real hardware (2026-08-08): set to 1 and left alone, it
+    // advanced to 2 on its own after period 1's 3 minutes plus the
+    // automatic 1-minute break, with no button press. Not just a
+    // referee-operated tally as initially assumed. Favero is authoritative
+    // for this like everything else it reports -- mirrored directly, no
+    // interpretation or filtering of e.g. 0 (idle/not-yet-set) applied.
+    if (m_state.match.round != f.numMatches) {
+        m_state.match.round = f.numMatches;
+        publishMatch();
+    }
+
     // ── Clock ────────────────────────────────────────────────────────────
     const uint32_t time_ms =
         (static_cast<uint32_t>(f.minutes) * 60 + f.seconds) * 1000;
@@ -470,6 +483,7 @@ void Opp2StateOwner::writeStateJson(char* buf, size_t bufSize) const {
     doc["apparatus_state"] = static_cast<int>(m_state.apparatus_state.state);
     doc["weapon"] = static_cast<int>(m_state.match.weapon);
     doc["match_num"] = m_state.match.match_num;
+    doc["round"] = m_state.match.round;
 
     JsonObject clock = doc["clock"].to<JsonObject>();
     clock["running"] = m_state.clock.running;
