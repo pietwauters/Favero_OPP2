@@ -202,6 +202,98 @@ settings page. No migration path was built for this (one-off, low-stakes
 during active development); worth revisiting if this ever needs to
 survive an OTA update to boards already deployed at an event.
 
+## Always-on remote-control AP: permanent `WIFI_AP_STA`, not a fallback
+
+The `/FaveroXxx` IR routes (`addFaveroIrRoute()`, `main.cpp`) have zero
+dependency on MQTT/OPP2/broker connectivity — they only ever touch
+`FaveroIR` (GPIO4). That made a "pure remote control" mode viable: the
+device now runs `WIFI_AP_STA` permanently, broadcasting a second,
+password-protected AP (`Piste_%03u-remote`, `buildApSsid()`) the entire
+time it's powered, independent of whether the normal STA/MQTT link is up
+at all. This is concurrent with normal STA operation, not a
+fallback-only mode — both run at once.
+
+- `WiFi.mode(WIFI_AP_STA)` + `WiFi.softAP(...)` (`main.cpp::setup()`) run
+  **after** `WiFiSetup::begin()` returns, never before or during.
+  WiFiManager manages WiFi mode internally throughout its own
+  `autoConnect()`/captive-portal flow (temporary AP+STA for the portal,
+  dropped back to plain `WIFI_STA` on a successful connect) — any mode
+  call issued earlier would just get overwritten by WiFiManager's own.
+  `WiFi.softAP()` never touches TCP port 80, so it's unrelated to (and
+  placed after) the existing `delay(500)` that compensates for
+  WiFiManager's blocking-portal webserver not releasing that port
+  instantly.
+- `g_server` needed no changes at all — it already binds all interfaces
+  (`0.0.0.0:80`), so it became reachable via the AP automatically the
+  moment `WiFi.softAP()` came up.
+- SSID convention: `Piste_%03u-remote` (`buildApSsid()`, mirrors
+  `buildMdnsHostname()`/the MQTT client ID's numeric-first style), kept
+  distinct from the one-time-setup `"Favero_OPP2-setup"` SSID
+  (`WiFiSetup.cpp`) — that one keeps its already-documented branding
+  exception above, untouched by this feature, since it's a different
+  network serving a different (temporary, config-only) purpose.
+- Security: WPA2-required, not open — `Settings::apPassword` (new NVS
+  field, `favero_opp2` namespace, default `"FaveroRemote1"`, always a
+  valid 8+ char password out of the box), editable on the settings page
+  like every other identity field. `/api/settings-save` validates
+  length 8–63 *before* touching any other field and 400s otherwise
+  (guard-then-reject, same idiom `addGuardedOpp2Route` already uses for
+  the running-clock check) — a bad AP password isn't a soft
+  misconfiguration like a bad `mqttBroker`, it makes `WiFi.softAP()` fail
+  outright at next boot, so it's the one field here worth rejecting
+  up front rather than saving blindly.
+- **Boot no longer blocks/reboot-loops just because STA is temporarily
+  unreachable** — this was a real gap in the first pass of this feature,
+  caught during testing rather than designed in up front: `main.cpp`'s
+  `WiFi.softAP()` call only ran *after* `WiFiSetup::begin()` returned,
+  and that function used to block in `wm.autoConnect()`'s captive portal
+  and `ESP.restart()` on any failed connect — so if the venue router was
+  down at boot, the device would loop in WiFiManager's own temporary
+  portal forever and the "always-on" remote AP would never actually
+  start, directly undercutting the point of the feature. Fixed in
+  `WiFiSetup::begin()` (now returns `bool`, see `WiFiSetup.h`): if
+  `wm.getWiFiIsSaved()` is true (credentials exist from a prior
+  successful setup), `wm.setConnectTimeout(15)` +
+  `wm.setEnableConfigPortal(false)` bound the attempt and skip the
+  blocking portal on failure — a failed connect at that point almost
+  always means the router is just currently down, not that the device
+  needs reconfiguring. Only a genuinely credential-less device (first
+  boot, or after `resetAndReboot()`) still blocks in the portal, since
+  that's the only way to enter STA credentials at all. `main.cpp::loop()`
+  nudges `WiFi.reconnect()` every 30s while `WiFi.status() !=
+  WL_CONNECTED`, since the core's own auto-reconnect is trusted to cover
+  a live connection *drop* but not confidently a connect that never
+  succeeded in the first place.
+- Restricting an AP-joined client is **client-side only** (`index.html`):
+  `IS_AP_CLIENT` checks `location.hostname === '192.168.4.1'` (ESP32's
+  fixed default softAP gateway — no `WiFi.softAPConfig()` call changes
+  it). Only Repeater/OPP2 are hidden and force-redirected to `'remote'`
+  (`AP_ALLOWED_VIEWS`) — those two need live MQTT-backed state this
+  client has no route to. **Settings stays reachable from the AP too**,
+  deliberately: it has no MQTT dependency, and it's the only place
+  `pisteNr` (which drives this device's own AP SSID,
+  `Piste_%03u-remote`) and `apPassword` can be changed — hiding it here
+  would mean a device could only ever be reconfigured over STA, defeating
+  the point for a piste with no STA network available at all. `poll()`
+  is still skipped entirely for an AP client (it would otherwise spin
+  uselessly against `/api/state`'s MQTT-backed data). Deliberate choice
+  to keep this in the one shared SPA rather than a second HTML
+  file/server-side interface check, consistent with "Web UI is one page"
+  above — and deliberately spoofable (editing `location.hostname` in
+  devtools defeats it trivially). That's accepted: this check is a UX
+  convenience only, not a security boundary — the AP's WPA2 password is
+  the actual boundary, and every `/FaveroXxx`/`/api/*` route is equally
+  reachable from *either* interface regardless of what the SPA shows.
+
+**Not yet verified on real hardware:** whether calling
+`WiFi.mode(WIFI_AP_STA)` right after WiFiManager has already established
+a `WIFI_STA` connection preserves that association cleanly, or forces a
+brief reconnect blip. No library/ESP-IDF doc reading resolved this either
+way with confidence — flagged rather than assumed, per this project's
+usual practice; see "Known gaps" below. Worst case if it does blip is a
+brief MQTT reconnect, already handled by `esp_mqtt_client`'s own retry
+logic — not expected to be user-visible even if it happens.
+
 ## MQTT: esp_mqtt_client, not PubSubClient — and callback stack safety
 
 - `PubSubClient`/`WiFiClient` was tried first. `subscribe()` reported
@@ -463,6 +555,10 @@ spending long on first-principles debugging.
 - No MQTT broker auth/TLS (the real broker this was tested against is
   anonymous-reachable on port 1883 for at least `apparatus/*`).
 - No OTA (traded away for the larger app partition — see above).
+- Whether `WiFi.mode(WIFI_AP_STA)` after an already-established STA
+  connection preserves that connection or forces a reconnect blip has
+  not been confirmed on real hardware — see "Always-on remote-control AP"
+  above.
 - Begin remains purely local UI state. End now does a proper CMS
   round-trip (see "Protocol boundaries" below) — Next/Prev/End are the
   three lifecycle actions that leave local state and wait on the CMS.

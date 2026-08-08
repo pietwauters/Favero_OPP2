@@ -44,6 +44,7 @@ AsyncWebServer g_server(80);
 // without a serial monitor.
 char g_pisteId[OPP2::PISTE_ID_MAX] = "1";
 char g_mdnsHostname[16]            = "piste_001";
+char g_apSsid[32]                  = "Piste_001-remote";
 
 // Deferred restart: HTTP handlers set this instead of calling ESP.restart()
 // directly, so the response has a chance to flush to the client first.
@@ -123,6 +124,15 @@ void buildPisteId(const Settings& settings, char* out, size_t outSize) {
 // label and MQTT client ID on its own.
 void buildMdnsHostname(uint32_t pisteNr, char* out, size_t outSize) {
     snprintf(out, outSize, "piste_%03u", pisteNr);
+}
+
+// SSID for the always-on remote-control AP -- same piste-number convention
+// as buildMdnsHostname()/the MQTT client ID, with a "-remote" suffix so it
+// reads clearly in a phone's WiFi picker as a distinct network from this
+// piste's CMS-facing identity strings (which aren't SSIDs at all), and from
+// the one-time-setup "Favero_OPP2-setup" SSID WiFiSetup.cpp uses.
+void buildApSsid(uint32_t pisteNr, char* out, size_t outSize) {
+    snprintf(out, outSize, "Piste_%03u-remote", pisteNr);
 }
 
 // Accepts either a literal IP or an mDNS "<name>.local" host, matching the
@@ -301,16 +311,26 @@ void setupWebServer() {
     // request to the other. Confirmed by observation: pisteId writes were
     // being served by the read handler and never actually saved.
     g_server.on("/api/settings-info", HTTP_GET, [](AsyncWebServerRequest* request) {
-        char buf[320];
+        char buf[640];
         snprintf(buf, sizeof(buf),
                  "{\"pisteNr\":%u,\"pisteName\":\"%s\",\"mqttBroker\":\"%s\",\"mqttPort\":%u,"
-                 "\"wifiSsid\":\"%s\",\"wifiIp\":\"%s\",\"mdnsHostname\":\"%s\"}",
+                 "\"wifiSsid\":\"%s\",\"wifiIp\":\"%s\",\"mdnsHostname\":\"%s\","
+                 "\"apSsid\":\"%s\",\"apIp\":\"%s\",\"apPassword\":\"%s\"}",
                  g_settings.pisteNr, g_settings.pisteName, g_settings.mqttBroker,
                  g_settings.mqttPort, WiFi.SSID().c_str(), WiFi.localIP().toString().c_str(),
-                 g_mdnsHostname);
+                 g_mdnsHostname, g_apSsid, WiFi.softAPIP().toString().c_str(),
+                 g_settings.apPassword);
         request->send(200, "application/json", buf);
     });
     g_server.on("/api/settings-save", HTTP_GET, [](AsyncWebServerRequest* request) {
+        if (request->hasParam("apPassword")) {
+            const String pw = request->getParam("apPassword")->value();
+            if (pw.length() < 8 || pw.length() > 63) {
+                request->send(400, "text/plain", "AP password must be 8-63 characters");
+                return;
+            }
+            strncpy(g_settings.apPassword, pw.c_str(), sizeof(g_settings.apPassword) - 1);
+        }
         if (request->hasParam("pisteNr")) {
             g_settings.pisteNr = request->getParam("pisteNr")->value().toInt();
         }
@@ -356,7 +376,12 @@ void setup() {
     Serial.begin(115200);
 
     g_settings.load();
-    WiFiSetup::begin(g_settings);  // blocks until STA connected, or via AP portal
+    // Returns false (without blocking in the captive portal) if STA
+    // credentials are already saved but currently unreachable -- see
+    // WiFiSetup.h. Only genuinely blocks/reboot-loops when no credentials
+    // exist at all. Either way, everything below (including the always-on
+    // remote AP) still comes up regardless of the result.
+    const bool staConnected = WiFiSetup::begin(g_settings);
 
     // Default modem-sleep power save adds a wake-up delay to every request
     // that lands after any idle gap -- this bridge needs to be responsive
@@ -369,10 +394,38 @@ void setup() {
     // own bind() below can lose that race (AsyncTCP.cpp bind error: -8).
     delay(500);
 
+    // Always-on remote-control AP, concurrent with STA. WiFiManager leaves
+    // the device in plain WIFI_STA (AP off) after a successful
+    // autoConnect() -- must switch mode here, never earlier: WiFiManager
+    // manages WiFi mode internally during its own portal and would just
+    // override an earlier call. softAP() never touches port 80, so this is
+    // unrelated to the delay(500) race above (kept separate anyway to leave
+    // that fix's job unambiguous).
+    // NOT YET VERIFIED ON REAL HARDWARE: whether switching WIFI_STA ->
+    // WIFI_AP_STA after STA is already associated preserves that
+    // connection or forces a brief reconnect blip. Watch Serial/MQTT
+    // connect behavior around this call on first real-device test.
+    WiFi.mode(WIFI_AP_STA);
+    if (strlen(g_settings.apPassword) < 8) {
+        Serial.println("[ap] stored AP password invalid, using default");
+        strncpy(g_settings.apPassword, "FaveroRemote1", sizeof(g_settings.apPassword) - 1);
+    }
+    buildApSsid(g_settings.pisteNr, g_apSsid, sizeof(g_apSsid));
+    if (!WiFi.softAP(g_apSsid, g_settings.apPassword)) {
+        Serial.println("[ap] softAP() failed to start");
+    }
+    Serial.printf("AP broadcasting: %s  IP: %s\n", g_apSsid,
+                  WiFi.softAPIP().toString().c_str());
+
     buildMdnsHostname(g_settings.pisteNr, g_mdnsHostname, sizeof(g_mdnsHostname));
     MDNS.begin(g_mdnsHostname);
-    Serial.printf("WiFi joined: %s  IP: %s  (also reachable at http://%s.local/)\n",
-                  WiFi.SSID().c_str(), WiFi.localIP().toString().c_str(), g_mdnsHostname);
+    if (staConnected) {
+        Serial.printf("WiFi joined: %s  IP: %s  (also reachable at http://%s.local/)\n",
+                      WiFi.SSID().c_str(), WiFi.localIP().toString().c_str(), g_mdnsHostname);
+    } else {
+        Serial.println("[wifi] STA not connected (venue WiFi unreachable?) -- "
+                        "running on the remote-control AP only, retrying STA in background");
+    }
 
     buildPisteId(g_settings, g_pisteId, sizeof(g_pisteId));
     g_opp2.begin(g_pisteId, &g_mqtt);
@@ -422,6 +475,19 @@ void loop() {
     }
 
     g_mqtt.loop();  // drains queued MQTT events -- see Esp32MqttClient::loop()
+
+    // WiFiSetup::begin() may have returned with STA unconnected (saved
+    // credentials but venue WiFi unreachable at boot -- see WiFiSetup.h)
+    // rather than blocking forever. Nudge a reconnect periodically rather
+    // than assuming the core's own auto-reconnect reliably covers a
+    // connect that never succeeded in the first place (as opposed to a
+    // live drop, which it does handle). Cheap no-op once actually
+    // connected.
+    static uint32_t s_lastWifiRetry = 0;
+    if (WiFi.status() != WL_CONNECTED && millis() - s_lastWifiRetry > 30000) {
+        s_lastWifiRetry = millis();
+        WiFi.reconnect();
+    }
 
     if (g_pendingAction != PendingAction::NONE && millis() >= g_pendingActionAt) {
         const PendingAction action = g_pendingAction;

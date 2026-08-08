@@ -15,12 +15,15 @@ void Settings::load() {
     String name = prefs.getString("pisteName", pisteName);
     String broker = prefs.getString("mqttBroker", mqttBroker);
     mqttPort = prefs.getUShort("mqttPort", mqttPort);
+    String apPass = prefs.getString("apPassword", apPassword);
     prefs.end();
 
     strncpy(pisteName, name.c_str(), sizeof(pisteName) - 1);
     pisteName[sizeof(pisteName) - 1] = '\0';
     strncpy(mqttBroker, broker.c_str(), sizeof(mqttBroker) - 1);
     mqttBroker[sizeof(mqttBroker) - 1] = '\0';
+    strncpy(apPassword, apPass.c_str(), sizeof(apPassword) - 1);
+    apPassword[sizeof(apPassword) - 1] = '\0';
 }
 
 void Settings::save() const {
@@ -30,5 +33,6 @@ void Settings::save() const {
     prefs.putString("pisteName", pisteName);
     prefs.putString("mqttBroker", mqttBroker);
     prefs.putUShort("mqttPort", mqttPort);
+    prefs.putString("apPassword", apPassword);
     prefs.end();
 }

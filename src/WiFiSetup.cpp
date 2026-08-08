@@ -27,7 +27,7 @@ void saveParamsCallback() {
 
 }  // namespace
 
-void WiFiSetup::begin(Settings& settings) {
+bool WiFiSetup::begin(Settings& settings) {
     g_settings = &settings;
     char pisteNrStr[8];
     snprintf(pisteNrStr, sizeof(pisteNrStr), "%u", settings.pisteNr);
@@ -43,17 +43,31 @@ void WiFiSetup::begin(Settings& settings) {
     wm.setParamsPage(true);
     wm.setConfigPortalTimeout(180);
 
-    // Tries saved STA credentials first; only falls back to the blocking
-    // AP + captive portal (SSID below) if that fails or nothing is saved
-    // yet -- station mode is the primary path, since this device's whole
-    // job is reaching an MQTT broker.
+    // Credentials already saved from a previous successful setup -- a
+    // failed connect here almost always means the venue WiFi/router is
+    // just temporarily unreachable, not that this device needs
+    // reconfiguring. Bound the attempt and skip the blocking captive
+    // portal on failure: falling into that would make the device
+    // unreachable for up to 180s and then reboot-loop, defeating the
+    // point of main.cpp's always-on remote-control AP, which exists
+    // exactly to keep this device usable through this case.
+    const bool hasSavedCreds = wm.getWiFiIsSaved();
+    if (hasSavedCreds) {
+        wm.setConnectTimeout(15);
+        wm.setEnableConfigPortal(false);
+    }
+
     const bool connected = wm.autoConnect("Favero_OPP2-setup");
-    if (!connected) {
-        // Portal ran and still never got connected (timed out) -- reboot
-        // and try the whole sequence again rather than running headless
-        // with no network at all.
+    if (!connected && !hasSavedCreds) {
+        // No credentials at all (first boot, or after resetAndReboot())
+        // -- the portal is the only way in, so it already ran (blocking,
+        // per setEnableConfigPortal's default) and still timed out
+        // unconfigured. Reboot and retry the whole sequence rather than
+        // running headless with no STA network and no way to configure
+        // one either.
         ESP.restart();
     }
+    return connected;
 }
 
 void WiFiSetup::resetAndReboot() {

@@ -17,6 +17,11 @@ struct Settings {
     char     mqttBroker[64]  = "openpiste.local";  // mDNS default, per OPP2 convention
     uint16_t mqttPort        = 1883;
 
+    // WPA2 password for the always-on remote-control AP (Piste_%03u-remote,
+    // see main.cpp). WPA2 requires 8-63 chars; this default is always valid
+    // out of the box -- change it via the settings page.
+    char apPassword[64] = "FaveroRemote1";
+
     void load();
     void save() const;
 };

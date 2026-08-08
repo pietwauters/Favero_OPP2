@@ -10,14 +10,6 @@
 </head>
 <body>
 
-  <nav>
-    <a href="#remote" data-view="remote">Remote</a>
-    <a href="#repeater" data-view="repeater">Repeater</a>
-    <a href="#opp2" data-view="opp2">OPP2</a>
-    <a href="#settings" data-view="settings">Settings</a>
-    <button id="btnFullscreen" class="fullscreen-btn">Fullscreen</button>
-  </nav>
-
   <section id="view-remote" class="view">
     <div class="grid-container">
     <div class="grid-item"><button class="button buttongreen" onclick="faveroAction('/FaveroStartStop')">Start<br/>Stop</button></div>
@@ -165,9 +157,6 @@
         <label for="mqttPort">MQTT port</label>
         <input id="mqttPort" type="number" min="1" max="65535">
       </div>
-      <div class="actionbar">
-        <button onclick="saveSettings()">Save &amp; reboot</button>
-      </div>
 
       <h3>WiFi</h3>
       <p>Current network: <span id="wifiSsid">--</span> (<span id="wifiIp">--</span>)</p>
@@ -181,9 +170,28 @@
         WiFi network to pick a new network and re-enter these settings.
       </p>
 
+      <h3>Remote-control AP</h3>
+      <p>Always-on network for the Remote page: <strong id="apSsid">--</strong> (<span id="apIp">--</span>)</p>
+      <div class="form-row">
+        <label for="apPassword">AP password (WPA2, 8-63 chars)</label>
+        <input id="apPassword" type="text" minlength="8" maxlength="63">
+      </div>
+
+      <div class="actionbar">
+        <button onclick="saveSettings()">Save &amp; reboot</button>
+      </div>
+
       <div id="statusLineSettings" class="status-line"></div>
     </div>
   </section>
+
+  <nav>
+    <a href="#remote" data-view="remote">Remote</a>
+    <a href="#repeater" data-view="repeater">Repeater</a>
+    <a href="#opp2" data-view="opp2">OPP2</a>
+    <a href="#settings" data-view="settings">Settings</a>
+    <button id="btnFullscreen" class="fullscreen-btn">Fullscreen</button>
+  </nav>
 
   <script>
     // ── View router ──────────────────────────────────────────────────────
@@ -195,7 +203,28 @@
     const VIEWS = ['remote', 'repeater', 'opp2', 'settings'];
     const VIEW_TITLES = { remote: 'Remote', repeater: 'Repeater', opp2: 'Match', settings: 'Settings' };
 
+    // 192.168.4.1 is the ESP32's fixed, never-reconfigured softAP gateway
+    // (no WiFi.softAPConfig() call is used) -- a client landing here is
+    // necessarily on the always-on remote-control AP, not the normal
+    // STA/MQTT-backed LAN. Client-side only, deliberately spoofable: this
+    // is UX convenience (hide views this client structurally can't use),
+    // not a security boundary -- the AP's WPA2 password is the real one.
+    const IS_AP_CLIENT = (location.hostname === '192.168.4.1');
+    // Repeater/OPP2 need live MQTT-backed state this client has no route
+    // to -- Settings has no such dependency and is where pisteNr (which
+    // drives this device's own AP SSID) and apPassword live, so it stays
+    // reachable here too (otherwise a device could only ever be
+    // reconfigured over STA, defeating the point for a piste with no STA
+    // network available at all).
+    const AP_ALLOWED_VIEWS = ['remote', 'settings'];
+    if (IS_AP_CLIENT) {
+      document.querySelectorAll('nav a').forEach(function (a) {
+        if (!AP_ALLOWED_VIEWS.includes(a.dataset.view)) a.style.display = 'none';
+      });
+    }
+
     function showView(name) {
+      if (IS_AP_CLIENT && !AP_ALLOWED_VIEWS.includes(name)) name = 'remote';
       if (!VIEWS.includes(name)) name = 'remote';
       VIEWS.forEach(function (v) {
         document.getElementById('view-' + v).style.display = (v === name) ? 'block' : 'none';
@@ -433,8 +462,10 @@
       setTimeout(() => action(`/Opp2SetFencer?side=R&name=${r}&noc=${rn}`), 300);
     }
 
-    setInterval(poll, 500);
-    poll();
+    if (!IS_AP_CLIENT) {
+      setInterval(poll, 500);
+      poll();
+    }
 
     // ── Settings view ────────────────────────────────────────────────────
     async function loadSettings() {
@@ -448,6 +479,9 @@
       document.getElementById('wifiIp').textContent = s.wifiIp;
       document.getElementById('mdnsHostname').textContent = s.mdnsHostname;
       document.getElementById('mdnsLink').href = `http://${s.mdnsHostname}.local/`;
+      document.getElementById('apSsid').textContent = s.apSsid;
+      document.getElementById('apIp').textContent = s.apIp;
+      document.getElementById('apPassword').value = s.apPassword;
     }
 
     async function saveSettings() {
@@ -456,8 +490,13 @@
       const pisteName = encodeURIComponent(document.getElementById('pisteName').value);
       const mqttBroker = encodeURIComponent(document.getElementById('mqttBroker').value);
       const mqttPort = encodeURIComponent(document.getElementById('mqttPort').value);
+      const apPassword = encodeURIComponent(document.getElementById('apPassword').value);
       document.getElementById('statusLineSettings').textContent = 'Saving, rebooting...';
-      await fetch(`/api/settings-save?pisteNr=${pisteNr}&pisteName=${pisteName}&mqttBroker=${mqttBroker}&mqttPort=${mqttPort}`);
+      const res = await fetch(`/api/settings-save?pisteNr=${pisteNr}&pisteName=${pisteName}&mqttBroker=${mqttBroker}&mqttPort=${mqttPort}&apPassword=${apPassword}`);
+      if (!res.ok) {
+        document.getElementById('statusLineSettings').textContent = 'Failed: ' + await res.text();
+        return;
+      }
       document.getElementById('statusLineSettings').textContent = 'Rebooted -- reload in a few seconds.';
     }
 
