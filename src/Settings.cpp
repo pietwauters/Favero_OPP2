@@ -16,6 +16,7 @@ void Settings::load() {
     String broker = prefs.getString("mqttBroker", mqttBroker);
     mqttPort = prefs.getUShort("mqttPort", mqttPort);
     String apPass = prefs.getString("apPassword", apPassword);
+    remoteLayout = prefs.getUChar("remoteLayout", remoteLayout);
     prefs.end();
 
     strncpy(pisteName, name.c_str(), sizeof(pisteName) - 1);
@@ -34,5 +35,6 @@ void Settings::save() const {
     prefs.putString("mqttBroker", mqttBroker);
     prefs.putUShort("mqttPort", mqttPort);
     prefs.putString("apPassword", apPassword);
+    prefs.putUChar("remoteLayout", remoteLayout);
     prefs.end();
 }

@@ -22,6 +22,12 @@ struct Settings {
     // out of the box -- change it via the settings page.
     char apPassword[64] = "FaveroRemote1";
 
+    // Which Remote view layout to render: 0 = classic (the full 18-button
+    // FA-05 grid), 1 = compact (Atlas-remote-style Main + Penalties
+    // screens, data/index.html). Purely a display choice, doesn't affect
+    // anything else in this struct.
+    uint8_t remoteLayout = 0;
+
     void load();
     void save() const;
 };

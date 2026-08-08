@@ -44,7 +44,19 @@ nav button.fullscreen-btn {
   cursor: pointer;
 }
 
+/* While actually in fullscreen, the nav (Remote/Repeater/OPP2/Settings/
+   Fullscreen) is pure overhead -- hidden entirely so the compact layout's
+   Start/Stop can claim that space instead. Toggled by the fullscreenchange
+   listener above, not a separate control. */
+body.is-fullscreen nav {
+  display: none;
+}
+
 .view {
+  display: none;
+}
+
+.remote-layout {
   display: none;
 }
 
@@ -193,6 +205,206 @@ section {
   font-size: 14px;
   color: #aaa;
   min-height: 20px;
+}
+
+/* ── Compact remote layout ────────────────────────────────────────────
+   Colors/shape lifted from github.com/pietwauters/remotecontrolapp's
+   colors.xml (primaryColor #17375E, primaryTextColor white, score
+   #E91E63 left / #4CAF50 right) -- rounded-rectangle Material buttons,
+   deliberately distinct from the classic grid's circular red/yellow/
+   green .button, matching the Android app's own plain navy buttons. */
+.atlas-panel {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 12px;
+}
+/* Main screen only: a flex column filling the actual viewport height, so
+   the button group (justify-content: center below) always ends up
+   vertically balanced regardless of how tall the screen is. 100vh first
+   as a fallback for old browsers that don't understand dvh at all (a
+   very old Android's stock/WebView browser, confirmed 2026-08-08 --
+   without this fallback the whole min-height rule was silently dropped
+   there, so the panel never stretched at all and Start/Stop just sized
+   to its content); 100dvh second to override it where supported (better
+   accounts for mobile browser chrome). Exact fit only when <nav> is
+   hidden (fullscreen, see body.is-fullscreen above); with nav visible
+   there's a small unavoidable overhang since 100vh/100dvh + nav's own
+   height together exceed the viewport. */
+.atlas-panel-main {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 100vh;
+  min-height: 100dvh;
+  box-sizing: border-box;
+}
+.atlas-top-row {
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+.atlas-score {
+  font-size: 64px;
+  font-weight: bold;
+  cursor: pointer;
+  /* Score itself is the +/- control (tap = point, long-press = undo) --
+     always active regardless of screen size, same long-press-vs-
+     text-selection fight as the classic grid's Red Card buttons, see
+     .button above. The mini +/- buttons below are an extra convenience
+     shown only when there's room, not a replacement for this. */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  touch-action: none;
+}
+.atlas-score-left { color: #E91E63; }
+.atlas-score-right { color: #4CAF50; }
+.atlas-score-col {
+  display: flex;
+  flex-direction: column;
+}
+.atlas-score-col-left { align-items: flex-start; }
+.atlas-score-col-right { align-items: flex-end; }
+/* Extra +/- buttons alongside the score, shown only when the screen has
+   height to spare -- tap/long-press on the score itself (above) always
+   works regardless, this is a convenience on top of that, not instead of
+   it. Threshold is a judgment call (confirmed 2026-08-08: an iPhone in
+   fullscreen clears it comfortably, a very old/small Android doesn't),
+   worth revisiting with more real device data rather than assumption. */
+.atlas-pm-mini {
+  display: none;
+  gap: 6px;
+  margin-top: 6px;
+}
+@media (min-height: 700px) {
+  .atlas-pm-mini {
+    display: flex;
+  }
+}
+.atlas-mini-btn {
+  background-color: #17375E;
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  width: 44px;
+  height: 40px;
+  font-size: 18px;
+  cursor: pointer;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  touch-action: none;
+}
+.atlas-center {
+  text-align: center;
+}
+.atlas-timer {
+  font-size: 34px;
+  font-weight: bold;
+}
+.atlas-round {
+  font-size: 16px;
+  color: #ccc;
+}
+.atlas-btn {
+  display: block;
+  width: 100%;
+  background-color: #17375E;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  padding: 14px;
+  margin: 6px 0;
+  font-size: 16px;
+  cursor: pointer;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  touch-action: none;
+}
+.atlas-btn.atlas-wide { width: 100%; }
+.atlas-btn.atlas-danger { background-color: #f44336; }
+.atlas-btn-hero {
+  /* Grows to fill leftover space up to a sensible cap -- unbounded
+     flex-grow made this the entire screen on a tall phone (iPhone,
+     confirmed 2026-08-08), clearly bigger than needed just because the
+     space existed. Once capped, .atlas-panel-main's justify-content:
+     center takes over and balances the whole button group in whatever
+     room is actually left, instead of the group just sticking to the
+     top with dead space below (the old Android's actual problem, fixed
+     above by the min-height fallback -- this cap and that fallback are
+     two separate fixes for two separate symptoms). min-height keeps it
+     generous even on a very short screen. */
+  flex: 1 1 auto;
+  max-height: 320px;
+  min-height: 140px;
+  /* Real vertical separation from the secondary row below (not just a
+     visual border) -- the referee should never be able to mistake a
+     reach for Start/Stop as a reach for Next/Pause or Reset. */
+  margin: 24px 0;
+  font-size: 28px;
+  font-weight: bold;
+}
+/* Next/Pause and Reset: ~1/3 of Start/Stop's width each (the row itself
+   is 2/3 width, split evenly, small gap) and close together -- secondary,
+   lower-stakes actions (Reset already needs a long-press to confirm)
+   that shouldn't compete with Start/Stop for thumb space. */
+.atlas-secondary-row {
+  display: flex;
+  flex: 0 0 auto;
+  width: 66%;
+  margin: 0 auto 12px;
+  gap: 8px;
+}
+.atlas-secondary-row .atlas-btn {
+  flex: 1;
+  width: auto;
+  margin: 0;
+}
+.atlas-pm-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+.atlas-pm-col {
+  flex: 1;
+}
+.atlas-pm-col .atlas-btn { margin: 4px 0; }
+/* Android's card buttons are left-edge-aligned under the left column,
+   right-edge under the right -- not centered in their column. */
+.atlas-pm-col:last-child .atlas-badge {
+  margin-left: auto;
+}
+.atlas-badge {
+  width: 56px;
+  height: 44px;
+  padding: 0;
+  border-radius: 10%;
+  font-size: 16px;
+  font-weight: bold;
+}
+.atlas-badge-yellow { background-color: #FFEB3B; color: #000000; }
+.atlas-badge-red { background-color: #f44336; color: #000000; }
+.atlas-prio-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.atlas-prio-row .atlas-btn { flex: 1; }
+.atlas-prio-indicator {
+  width: 20px;
+  text-align: center;
+  font-size: 20px;
+  color: #4c8c4a;
 }
 
 @media only screen and (max-width: 600px) {

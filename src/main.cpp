@@ -293,6 +293,23 @@ void setupWebServer() {
         g_opp2.setFencer(side, name.c_str(), noc.c_str());
     });
 
+    // UW2F P-cards + passivity timer -- local/OPP2 state only, never IR:
+    // the Favero has no way to display this at all (confirmed reason for
+    // building it this way), it's purely for the app/repeaters/CMS. Not
+    // guarded by addGuardedOpp2Route: giving a UW2F card happens mid-bout
+    // while the clock is running, same as the existing red/yellow card
+    // routes above.
+    addOpp2Route("/Opp2UW2FCardLeft",
+                  [](AsyncWebServerRequest*) { g_opp2.incrementPCard(OPP2::Side::LEFT); });
+    addOpp2Route("/Opp2UW2FCardRight",
+                  [](AsyncWebServerRequest*) { g_opp2.incrementPCard(OPP2::Side::RIGHT); });
+    addOpp2Route("/Opp2UndoUW2FCardLeft",
+                  [](AsyncWebServerRequest*) { g_opp2.undoPCard(OPP2::Side::LEFT); });
+    addOpp2Route("/Opp2UndoUW2FCardRight",
+                  [](AsyncWebServerRequest*) { g_opp2.undoPCard(OPP2::Side::RIGHT); });
+    addOpp2Route("/Opp2RestoreUW2FTimer",
+                  [](AsyncWebServerRequest*) { g_opp2.restoreUW2FTimer(); });
+
     // Live state for the OPP2 page's polling loop.
     g_server.on("/api/state", HTTP_GET, [](AsyncWebServerRequest* request) {
         char buf[768];
@@ -311,15 +328,16 @@ void setupWebServer() {
     // request to the other. Confirmed by observation: pisteId writes were
     // being served by the read handler and never actually saved.
     g_server.on("/api/settings-info", HTTP_GET, [](AsyncWebServerRequest* request) {
-        char buf[640];
+        char buf[672];
         snprintf(buf, sizeof(buf),
                  "{\"pisteNr\":%u,\"pisteName\":\"%s\",\"mqttBroker\":\"%s\",\"mqttPort\":%u,"
                  "\"wifiSsid\":\"%s\",\"wifiIp\":\"%s\",\"mdnsHostname\":\"%s\","
-                 "\"apSsid\":\"%s\",\"apIp\":\"%s\",\"apPassword\":\"%s\"}",
+                 "\"apSsid\":\"%s\",\"apIp\":\"%s\",\"apPassword\":\"%s\","
+                 "\"remoteLayout\":%u}",
                  g_settings.pisteNr, g_settings.pisteName, g_settings.mqttBroker,
                  g_settings.mqttPort, WiFi.SSID().c_str(), WiFi.localIP().toString().c_str(),
                  g_mdnsHostname, g_apSsid, WiFi.softAPIP().toString().c_str(),
-                 g_settings.apPassword);
+                 g_settings.apPassword, g_settings.remoteLayout);
         request->send(200, "application/json", buf);
     });
     g_server.on("/api/settings-save", HTTP_GET, [](AsyncWebServerRequest* request) {
@@ -344,6 +362,10 @@ void setupWebServer() {
         }
         if (request->hasParam("mqttPort")) {
             g_settings.mqttPort = request->getParam("mqttPort")->value().toInt();
+        }
+        if (request->hasParam("remoteLayout")) {
+            const int layout = request->getParam("remoteLayout")->value().toInt();
+            g_settings.remoteLayout = (layout == 1) ? 1 : 0;
         }
         g_settings.save();
         request->send(200, "text/plain", "OK -- rebooting");

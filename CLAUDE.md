@@ -268,22 +268,37 @@ fallback-only mode — both run at once.
   `IS_AP_CLIENT` checks `location.hostname === '192.168.4.1'` (ESP32's
   fixed default softAP gateway — no `WiFi.softAPConfig()` call changes
   it). Only Repeater/OPP2 are hidden and force-redirected to `'remote'`
-  (`AP_ALLOWED_VIEWS`) — those two need live MQTT-backed state this
-  client has no route to. **Settings stays reachable from the AP too**,
+  (`AP_ALLOWED_VIEWS`) — **not** because `/api/state` needs MQTT to reach
+  an AP client (it doesn't — see below), but because those two views'
+  *content* (fencer names, match info, lifecycle buttons) only has real
+  meaning once a CMS has actually pushed data over MQTT; showing them
+  against a broker that was never reached would just be stale/misleading
+  clutter, and their lifecycle buttons (Next/Prev/Begin/End) are no-ops
+  without one. **Settings stays reachable from the AP too**,
   deliberately: it has no MQTT dependency, and it's the only place
   `pisteNr` (which drives this device's own AP SSID,
   `Piste_%03u-remote`) and `apPassword` can be changed — hiding it here
   would mean a device could only ever be reconfigured over STA, defeating
-  the point for a piste with no STA network available at all. `poll()`
-  is still skipped entirely for an AP client (it would otherwise spin
-  uselessly against `/api/state`'s MQTT-backed data). Deliberate choice
-  to keep this in the one shared SPA rather than a second HTML
+  the point for a piste with no STA network available at all. Deliberate
+  choice to keep this in the one shared SPA rather than a second HTML
   file/server-side interface check, consistent with "Web UI is one page"
   above — and deliberately spoofable (editing `location.hostname` in
   devtools defeats it trivially). That's accepted: this check is a UX
   convenience only, not a security boundary — the AP's WPA2 password is
   the actual boundary, and every `/FaveroXxx`/`/api/*` route is equally
   reachable from *either* interface regardless of what the SPA shows.
+- **`poll()` (`/api/state`) runs unconditionally, regardless of
+  `IS_AP_CLIENT`.** Originally gated off for AP clients on the claim that
+  it was "MQTT-backed data with no route to reach it" — **that claim was
+  wrong**, caught 2026-08-08 when the compact remote layout's Main screen
+  (the first Remote-view content to actually display live score/clock)
+  showed permanently blank placeholders over the AP. `/api/state` is
+  populated straight from the Favero's UART telemetry via
+  `Opp2StateOwner`, with zero MQTT/STA dependency — an AP-connected
+  client reaches it exactly as well as an STA one, since it's just
+  another HTTP endpoint on the same device already serving the page.
+  Only the *other* views' content (fencer names/match info from a CMS)
+  is actually MQTT-gated, per the bullet above.
 
 **Not yet verified on real hardware:** whether calling
 `WiFi.mode(WIFI_AP_STA)` right after WiFiManager has already established
@@ -474,6 +489,63 @@ judgment call, not measured against real latency data — worth shortening
 only with actual evidence it's overly conservative, not by assumption,
 given what double-toggling would do.
 
+## Compact remote layout (Atlas-style), selectable in Settings
+
+`data/index.html`'s Remote view (the "classic" 18-button FA-05 grid) got
+dense enough ("large buttons... don't fit on a single line") to warrant
+an alternative. Modeled on the user's own Atlas-device remote app
+(github.com/pietwauters/remotecontrolapp) — mapped against its actual
+Kotlin source, not just its layout XML/labels, since several buttons
+weren't what their labels suggested (e.g. "Next/Pause" does nothing on
+tap and only sends "next period" on long-press; the UW2F button
+auto-escalates a single card rather than being three separate Y/R/B
+buttons). Selected per-device via `Settings::remoteLayout` (0=classic,
+1=compact, `/api/settings-info`+`-save`, takes effect on next boot like
+every other setting here) — classic is unchanged, byte-for-byte, when
+selected.
+
+- **Three `.remote-layout` divs, one `<section>`.** `#remoteClassic`
+  (the existing grid), `#remoteCompactMain` (score/clock/round,
+  start/stop, +/-, reset), `#remoteCompactPenalties` (cards, priority,
+  UW2F) all live inside the same `<section id="view-remote">` — no new
+  files/routes for markup, same "one page" reasoning as above.
+  `renderRemoteLayout()` (`index.html`) shows exactly one, based on
+  `activeRemoteLayout` (fetched once from `/api/settings-info` at page
+  load — distinct from the Settings view's own `<select
+  id="remoteLayout">`, which only changes what gets *saved*, not what's
+  live in this page load) and, when compact, `compactSubView`
+  ('main'/'penalties').
+- **`leftScore`/`rightScore`/`clock` converted from ids to classes** so
+  the compact Main screen can show the same live values the Repeater
+  view already does — the same id→class dedup this file already
+  documents doing once for `apparatusState`/`matchNum`/etc. `poll()`
+  updated to `setText()`/`querySelectorAll('.clock')` accordingly.
+- **Main<->Penalties sub-navigation**: swipe (touchstart/touchend deltaX
+  on `#view-remote`, ~60px horizontal threshold, ignored if vertical
+  delta dominates) *and* explicit "Penalties ->"/"<- Main" buttons —
+  swipe mirrors the Atlas app's own gesture nav, buttons are the
+  reliable fallback (desktop, or if swipe tuning ever needs revisiting).
+  Coexists fine with the Red/Yellow/UW2F buttons' own pointer-event
+  long-press handling below (scoped to individual elements, doesn't stop
+  propagation).
+- **`bindRedCardButton()` generalized to `bindLongPress()`** (tap fires
+  one URL, long-press fires another, or — new — tap can instead just
+  call a plain JS callback with no network request, needed for Reset's
+  tap-warns/long-press-confirms behavior, mirrored from the Atlas app).
+  Reused for: Red cards (unchanged behavior, tap gives/long-press
+  undoes), Yellow cards (long-press just re-sends the same tap command —
+  Favero yellow is a raw IR *toggle*, not a counted value like red, so
+  there's no separate "undo" IR command to long-press into), the new
+  UW2F control (tap `/Opp2UW2FCardLeft|Right`, long-press
+  `/Opp2UndoUW2FCardLeft|Right`), and Reset (tap only shows "Long-press
+  to reset", long-press fires `/FaveroReset`).
+- **Explicitly omitted, no Favero equivalent**: Black card buttons
+  (Favero hardware has no black-card IR command at all — same limitation
+  as everywhere else in this project) and the "Next" half of "Next/Pause"
+  (period-advance already happens automatically on the Favero itself,
+  confirmed under "Round" above — mapped to the existing `/FaveroPause`
+  instead, per explicit user decision).
+
 ## Protocol boundaries (explicit user decisions, do not relitigate)
 
 - **Next/Prev never guess pool/tableau progression.** They publish
@@ -529,10 +601,21 @@ given what double-toggling would do.
   drops anything published under `software/*` from unauthorized/anonymous
   clients (accepts the `PUBLISH` at the protocol level, then never forwards
   or retains it — no error surfaced to the publisher).
-- **UW2F is timer-only, never auto-assigns `p_card`.** Elapsed wall time
-  since the last valid hit, accruing only while Favero reports the clock
-  running, resetting on any score change. `p_card` is a human officiating
-  call (explicit decision) and this bridge never sets it above 0.
+- **UW2F timer is derived, `p_card` is given locally via the compact
+  remote layout, never via IR.** Elapsed wall time since the last valid
+  hit, accruing only while Favero reports the clock running, resetting on
+  any score change. This was originally "never sets `p_card` above 0 --
+  a human officiating call" (explicit decision); revised (2026-08-08,
+  explicit decision) once the compact layout's UW2F control gave a
+  concrete reason to actually set it: `Opp2StateOwner::incrementPCard()`/
+  `undoPCard()` mutate `uw2f.<side>.p_card` directly (capped at 5, per
+  `opp2_types.h`'s "1-5 ordinal position per rulebook"), and giving a
+  card resets the passivity timer same as a hit does (also explicit
+  decision — a card is itself an enforcement event). Still never touches
+  the Favero at all: it has no way to display a P-card or this timer, so
+  unlike every IR-backed action in this class there's nothing to also
+  send over IR here — purely `Opp2StateOwner`/OPP2-over-MQTT state for
+  the web UI, repeaters, and CMS. See "Compact remote layout" below.
 - **Web UI strings are plain ASCII only.** A `‖`/`▶`/`◀` mojibake bug
   (missing `<meta charset="UTF-8">`) was fixed, but the glyphs were then
   replaced with `|`/`>`/`<` anyway rather than just fixing the encoding —

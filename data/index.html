@@ -11,6 +11,11 @@
 <body>
 
   <section id="view-remote" class="view">
+    <!-- Classic: the full FA-05 button grid, unchanged. Compact (below):
+         an alternative Atlas-remote-style layout, selectable in Settings
+         -- see CLAUDE.md "Compact remote layout". Only one of the three
+         .remote-layout divs is ever visible at a time (renderRemoteLayout()). -->
+    <div id="remoteClassic" class="remote-layout">
     <div class="grid-container">
     <div class="grid-item"><button class="button buttongreen" onclick="faveroAction('/FaveroStartStop')">Start<br/>Stop</button></div>
     <div class="grid-item"><button class="button buttonyellow" onclick="faveroAction('/FaveroRearm')">Rearm</button></div>
@@ -36,6 +41,99 @@
     <div class="grid-item"><button class="button" onclick="faveroAction('/FaveroPrioCas')">Pcas</button></div>
     <div class="grid-item"><button class="button" onclick="faveroAction('/FaveroTeleAq')">Telec<br/>Acquis</button></div>
     </div>
+    </div>
+
+    <!-- Compact: modeled on github.com/pietwauters/remotecontrolapp's
+         activity_main.xml/activity_penalties.xml -- same top-to-bottom
+         flow (score/timer row, +/- under each score, wide Start/Stop,
+         Next/Pause, full-width Reset at the very bottom) and the same
+         navy/white/pink/green Material palette (colors.xml:
+         primaryColor #17375E button background, score text #E91E63
+         left / #4CAF50 right), using the atlas-* CSS classes below
+         instead of the classic grid's circular red/yellow/green
+         .button. See CLAUDE.md "Compact remote layout". -->
+    <div id="remoteCompactMain" class="remote-layout">
+      <div class="atlas-panel atlas-panel-main">
+        <div class="atlas-top-row">
+          <div class="atlas-score-col atlas-score-col-left">
+            <div id="btnScoreLeft" class="atlas-score atlas-score-left leftScore">--</div>
+            <!-- Extra convenience only -- hidden by default (see
+                 .atlas-pm-mini, shown above a min-height breakpoint), the
+                 score itself (bindLongPress above) is always the primary
+                 +/- control regardless of screen size. -->
+            <div class="atlas-pm-mini">
+              <button class="atlas-mini-btn" onclick="faveroAction('/FaveroPlusLeft')">+</button>
+              <button class="atlas-mini-btn" onclick="faveroAction('/FaveroMinusLeft')">-</button>
+            </div>
+          </div>
+          <div class="atlas-center">
+            <div class="atlas-timer clock">-:--</div>
+            <div class="atlas-round">Round <span class="round">--</span></div>
+          </div>
+          <div class="atlas-score-col atlas-score-col-right">
+            <div id="btnScoreRight" class="atlas-score atlas-score-right rightScore">--</div>
+            <div class="atlas-pm-mini">
+              <button class="atlas-mini-btn" onclick="faveroAction('/FaveroPlusRight')">+</button>
+              <button class="atlas-mini-btn" onclick="faveroAction('/FaveroMinusRight')">-</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- The one button a referee must be able to hit confidently
+             without looking, isolated from everything else by real
+             vertical space (not just a border) -- grows to fill whatever
+             room is actually available (atlas-panel-main below), so it's
+             always as large as the device's screen allows rather than a
+             fixed size that's too big on a small phone or wastes space on
+             a tall one. -->
+        <button class="atlas-btn atlas-btn-hero" onclick="faveroAction('/FaveroStartStop')">Start/Stop</button>
+
+        <!-- Secondary actions: deliberately smaller (~1/3 of Start/Stop's
+             width each) and close together -- these are lower-stakes
+             (Reset already requires a long-press to confirm) and
+             shouldn't compete with Start/Stop for thumb real estate. -->
+        <div class="atlas-secondary-row">
+          <button class="atlas-btn" onclick="faveroAction('/FaveroPause')">Next / Pause</button>
+          <button id="btnCompactReset" class="atlas-btn atlas-danger">Reset</button>
+        </div>
+
+        <div class="actionbar">
+          <button onclick="showCompactSubView('penalties')">Penalties -&gt;</button>
+        </div>
+        <div id="statusLineCompactMain" class="status-line"></div>
+      </div>
+    </div>
+
+    <div id="remoteCompactPenalties" class="remote-layout">
+      <div class="atlas-panel">
+        <div class="actionbar">
+          <button onclick="showCompactSubView('main')">&lt;- Main</button>
+        </div>
+
+        <div class="atlas-pm-row">
+          <div class="atlas-pm-col">
+            <button id="btnCompactYellowLeft" class="atlas-btn atlas-badge atlas-badge-yellow">Y</button>
+            <button id="btnCompactRedLeft" class="atlas-btn atlas-badge atlas-badge-red">R</button>
+          </div>
+          <div class="atlas-pm-col">
+            <button id="btnCompactYellowRight" class="atlas-btn atlas-badge atlas-badge-yellow">Y</button>
+            <button id="btnCompactRedRight" class="atlas-btn atlas-badge atlas-badge-red">R</button>
+          </div>
+        </div>
+
+        <button id="btnUW2FLeft" class="atlas-btn atlas-wide">UW2F Left (<span class="pcardLeft">0</span>)</button>
+        <button id="btnUW2FRight" class="atlas-btn atlas-wide">UW2F Right (<span class="pcardRight">0</span>)</button>
+        <div class="atlas-prio-row">
+          <span class="atlas-prio-indicator">&lt;</span>
+          <button class="atlas-btn atlas-wide" onclick="faveroAction('/FaveroPrioMan')">Priority</button>
+          <span class="atlas-prio-indicator">&gt;</span>
+        </div>
+        <p class="atlas-round" style="text-align:center;">Passivity timer: <span class="uw2fTimer">0:00</span></p>
+        <button class="atlas-btn atlas-wide" onclick="faveroAction('/Opp2RestoreUW2FTimer')">Undo Timer Reset</button>
+
+        <div id="statusLineCompactPenalties" class="status-line"></div>
+      </div>
+    </div>
   </section>
 
   <section id="view-repeater" class="view">
@@ -43,7 +141,7 @@
 
       <div class="scoreboard">
         <div class="side">
-          <div id="leftScore" class="score">--</div>
+          <div class="score leftScore">--</div>
           <div>
             <span id="leftOnTarget" class="lamp"></span>
             <span id="leftWhite" class="lamp"></span>
@@ -52,9 +150,9 @@
             <span id="leftPrio">&nbsp;</span>
           </div>
         </div>
-        <div id="clock" class="clock">-:--</div>
+        <div class="clock">-:--</div>
         <div class="side">
-          <div id="rightScore" class="score">--</div>
+          <div class="score rightScore">--</div>
           <div>
             <span id="rightPrio">&nbsp;</span>
             <span id="rightYellow" class="lamp card">Y</span>
@@ -140,6 +238,15 @@
 
   <section id="view-settings" class="view">
     <div class="panel">
+      <h3>Remote Control</h3>
+      <div class="form-row">
+        <label for="remoteLayout">Remote layout</label>
+        <select id="remoteLayout">
+          <option value="0">Classic (full grid)</option>
+          <option value="1">Compact</option>
+        </select>
+      </div>
+
       <h3>OPP2 / MQTT</h3>
       <div class="form-row">
         <label for="pisteNr">Piste number</label>
@@ -289,10 +396,20 @@
         }
       });
 
+      // Hides <nav> entirely while actually in fullscreen (not just a
+      // display:none on the button set -- the referee needs every pixel
+      // for the compact layout's Start/Stop, see .atlas-panel-main below),
+      // restored on exit. Tied to the real Fullscreen API state rather
+      // than a separate manual toggle -- reuses this button as the single
+      // way in and out. Only helps on engines where fullscreen actually
+      // works (see the iOS Safari gap noted above); harmless no-op
+      // otherwise since fullscreenchange just never fires there.
       ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange']
         .forEach(function (evt) {
           document.addEventListener(evt, function () {
-            btn.textContent = currentFsElement() ? 'Exit fullscreen' : 'Fullscreen';
+            const inFullscreen = !!currentFsElement();
+            btn.textContent = inFullscreen ? 'Exit fullscreen' : 'Fullscreen';
+            document.body.classList.toggle('is-fullscreen', inFullscreen);
           });
         });
     })();
@@ -339,15 +456,16 @@
       fetch(url);
     }
 
-    // Long-press support for the Red Card buttons: short press gives a
-    // card (normal faveroAction), long press undoes one. There's no
-    // "remove card" button on the real Favero remote at all -- the
-    // undo only exists here, correcting this bridge's own locally-tracked
-    // count and the score, since the Favero can't un-give a card itself
-    // (see main.cpp's /FaveroUndoRedLeft|Right). Longer, distinct
-    // feedback (200ms vs the usual 100ms) on the undo so it's clear
-    // something different just happened.
-    function bindRedCardButton(el, side) {
+    // Generalized long-press gesture: short tap fires opts.tapUrl (or, if
+    // omitted, calls opts.onTap -- used by Reset, which only warns on a
+    // tap and needs long-press to actually confirm), long-press fires
+    // opts.longUrl instead. Originally written just for the Red Card
+    // buttons' tap-gives/long-press-undoes pattern; generalized for the
+    // compact layout's Yellow Card (long-press re-sends the same IR
+    // toggle -- Favero yellow has no separate "undo" concept, it's a
+    // toggle either way), UW2F card (tap gives, long-press undoes, same
+    // as Red), and Reset (tap warns, long-press confirms).
+    function bindLongPress(el, opts) {
       const LONG_PRESS_MS = 500;
       let timer = null;
       let firedLong = false;
@@ -356,7 +474,7 @@
         firedLong = false;
         timer = setTimeout(function () {
           firedLong = true;
-          faveroAction('/FaveroUndoRed' + side, 200);
+          if (opts.longUrl) faveroAction(opts.longUrl, opts.longFeedbackMs);
         }, LONG_PRESS_MS);
       }
       function cancel() {
@@ -364,7 +482,12 @@
       }
       function end() {
         cancel();
-        if (!firedLong) faveroAction('/FaveroRed' + side);
+        if (firedLong) return;
+        if (opts.tapUrl) {
+          faveroAction(opts.tapUrl, opts.tapFeedbackMs);
+        } else if (opts.onTap) {
+          opts.onTap();
+        }
       }
 
       el.addEventListener('pointerdown', start);
@@ -373,8 +496,94 @@
       el.addEventListener('pointerleave', cancel);
       el.addEventListener('contextmenu', function (e) { e.preventDefault(); });
     }
-    bindRedCardButton(document.getElementById('btnRedLeft'), 'Left');
-    bindRedCardButton(document.getElementById('btnRedRight'), 'Right');
+
+    bindLongPress(document.getElementById('btnRedLeft'),
+      { tapUrl: '/FaveroRedLeft', longUrl: '/FaveroUndoRedLeft', longFeedbackMs: 200 });
+    bindLongPress(document.getElementById('btnRedRight'),
+      { tapUrl: '/FaveroRedRight', longUrl: '/FaveroUndoRedRight', longFeedbackMs: 200 });
+
+    // ── Compact layout ───────────────────────────────────────────────────
+    // Score itself is the +/- control here (no separate buttons): tap
+    // gives a point, long-press takes one back.
+    bindLongPress(document.getElementById('btnScoreLeft'),
+      { tapUrl: '/FaveroPlusLeft', longUrl: '/FaveroMinusLeft', longFeedbackMs: 200 });
+    bindLongPress(document.getElementById('btnScoreRight'),
+      { tapUrl: '/FaveroPlusRight', longUrl: '/FaveroMinusRight', longFeedbackMs: 200 });
+    bindLongPress(document.getElementById('btnCompactRedLeft'),
+      { tapUrl: '/FaveroRedLeft', longUrl: '/FaveroUndoRedLeft', longFeedbackMs: 200 });
+    bindLongPress(document.getElementById('btnCompactRedRight'),
+      { tapUrl: '/FaveroRedRight', longUrl: '/FaveroUndoRedRight', longFeedbackMs: 200 });
+    // Yellow has no separate "undo" IR command -- it's a raw toggle on the
+    // Favero itself (press again = off), so long-press just re-sends the
+    // same command rather than a distinct undo route.
+    bindLongPress(document.getElementById('btnCompactYellowLeft'),
+      { tapUrl: '/FaveroYellowLeft', longUrl: '/FaveroYellowLeft', longFeedbackMs: 150 });
+    bindLongPress(document.getElementById('btnCompactYellowRight'),
+      { tapUrl: '/FaveroYellowRight', longUrl: '/FaveroYellowRight', longFeedbackMs: 150 });
+    // UW2F P-card: local/OPP2 state only, no IR at all -- see main.cpp.
+    bindLongPress(document.getElementById('btnUW2FLeft'),
+      { tapUrl: '/Opp2UW2FCardLeft', longUrl: '/Opp2UndoUW2FCardLeft', longFeedbackMs: 200 });
+    bindLongPress(document.getElementById('btnUW2FRight'),
+      { tapUrl: '/Opp2UW2FCardRight', longUrl: '/Opp2UndoUW2FCardRight', longFeedbackMs: 200 });
+    // Reset: tap only warns (mirrors the Atlas remote this layout is
+    // modeled on -- accidental taps shouldn't zero the match), long-press
+    // actually fires it.
+    bindLongPress(document.getElementById('btnCompactReset'), {
+      longUrl: '/FaveroReset', longFeedbackMs: 200,
+      onTap: function () {
+        const el = document.getElementById('statusLineCompactMain');
+        el.textContent = 'Long-press to reset';
+        setTimeout(function () { el.textContent = ''; }, 1500);
+      }
+    });
+
+    // Sub-navigation between the compact layout's Main and Penalties
+    // screens -- swipe (mirroring the Atlas app's own gesture nav) and
+    // explicit buttons both, so it works without touch too.
+    let compactSubView = 'main';
+    function renderRemoteLayout() {
+      const compact = activeRemoteLayout === 1;
+      document.getElementById('remoteClassic').style.display = compact ? 'none' : 'block';
+      document.getElementById('remoteCompactMain').style.display =
+        (compact && compactSubView === 'main') ? 'block' : 'none';
+      document.getElementById('remoteCompactPenalties').style.display =
+        (compact && compactSubView === 'penalties') ? 'block' : 'none';
+    }
+    function showCompactSubView(name) {
+      compactSubView = name;
+      renderRemoteLayout();
+    }
+    (function () {
+      const el = document.getElementById('view-remote');
+      let startX = 0, startY = 0;
+      el.addEventListener('touchstart', function (e) {
+        startX = e.touches[0].clientX;
+        startY = e.touches[0].clientY;
+      }, { passive: true });
+      el.addEventListener('touchend', function (e) {
+        if (activeRemoteLayout !== 1) return;
+        const dx = e.changedTouches[0].clientX - startX;
+        const dy = e.changedTouches[0].clientY - startY;
+        if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy)) return;
+        showCompactSubView(dx < 0 ? 'penalties' : 'main');
+      }, { passive: true });
+    })();
+
+    // Which layout is currently active -- fetched once at page load from
+    // the persisted setting (data/index.html's Settings view has its own
+    // separate <select id="remoteLayout"> for *changing* this, which only
+    // takes effect after Save & reboot; this is just what's active right
+    // now). All three .remote-layout divs default to display:none in CSS,
+    // so render synchronously with the classic default *before* the fetch
+    // even starts -- otherwise the Remote view would be completely blank
+    // (not just showing the wrong layout) for however long that fetch
+    // takes, or forever if it fails.
+    let activeRemoteLayout = 0;
+    renderRemoteLayout();
+    fetch('/api/settings-info').then(function (r) { return r.json(); }).then(function (s) {
+      activeRemoteLayout = s.remoteLayout || 0;
+      renderRemoteLayout();
+    }).catch(function () {});
 
     // ── Shared live-state polling (Repeater + OPP2 views) ───────────────
     const APPARATUS_STATE = ["Fencing", "Halt", "Pause", "Waiting", "Ending", "Unknown"];
@@ -395,15 +604,19 @@
         const res = await fetch('/api/state', { cache: 'no-store' });
         const s = await res.json();
 
-        // Repeater-only elements
-        document.getElementById('leftScore').textContent = s.left.score;
-        document.getElementById('rightScore').textContent = s.right.score;
+        // Repeater + compact-Main elements (leftScore/rightScore/clock are
+        // classes, not ids -- shown in both views, same pattern CLAUDE.md
+        // already documents for apparatusState/matchNum/etc.)
+        setText('leftScore', s.left.score);
+        setText('rightScore', s.right.score);
         const mins = Math.floor(s.clock.time_ms / 60000);
         const secs = Math.floor((s.clock.time_ms % 60000) / 1000);
-        const clockEl = document.getElementById('clock');
-        clockEl.textContent = mins + ':' + String(secs).padStart(2, '0');
-        clockEl.classList.toggle('clock-running', s.clock.running);
-        clockEl.classList.toggle('clock-stopped', !s.clock.running);
+        const clockText = mins + ':' + String(secs).padStart(2, '0');
+        document.querySelectorAll('.clock').forEach(function (el) {
+          el.textContent = clockText;
+          el.classList.toggle('clock-running', s.clock.running);
+          el.classList.toggle('clock-stopped', !s.clock.running);
+        });
         setLamp('leftOnTarget', s.left.on_target, 'on-left');
         setLamp('rightOnTarget', s.right.on_target, 'on-right');
         setLamp('leftWhite', s.left.white, 'white-on');
@@ -423,6 +636,13 @@
         setText('weapon', WEAPON[s.weapon] || '?');
         setText('leftCurrent', s.left.name ? (s.left.name + (s.left.noc ? ' (' + s.left.noc + ')' : '')) : '--');
         setText('rightCurrent', s.right.name ? (s.right.name + (s.right.noc ? ' (' + s.right.noc + ')' : '')) : '--');
+
+        // Compact-Penalties-only elements
+        setText('pcardLeft', s.left.p_card || 0);
+        setText('pcardRight', s.right.p_card || 0);
+        const uw2fMins = Math.floor(s.uw2f.time_ms / 60000);
+        const uw2fSecs = Math.floor((s.uw2f.time_ms % 60000) / 1000);
+        setText('uw2fTimer', uw2fMins + ':' + String(uw2fSecs).padStart(2, '0'));
 
         // OPP2-only elements
         document.getElementById('timerWarning').style.display = s.clock.running ? 'block' : 'none';
@@ -462,10 +682,14 @@
       setTimeout(() => action(`/Opp2SetFencer?side=R&name=${r}&noc=${rn}`), 300);
     }
 
-    if (!IS_AP_CLIENT) {
-      setInterval(poll, 500);
-      poll();
-    }
+    // /api/state is served locally from Opp2StateOwner's state, populated
+    // directly from the Favero's UART telemetry -- completely independent
+    // of MQTT/STA connectivity, so an AP-connected client has just as much
+    // of a route to it as an STA one. Runs unconditionally (previously
+    // gated on !IS_AP_CLIENT under the mistaken assumption this was
+    // MQTT-backed data -- confirmed wrong 2026-08-08, see CLAUDE.md).
+    setInterval(poll, 500);
+    poll();
 
     // ── Settings view ────────────────────────────────────────────────────
     async function loadSettings() {
@@ -482,6 +706,7 @@
       document.getElementById('apSsid').textContent = s.apSsid;
       document.getElementById('apIp').textContent = s.apIp;
       document.getElementById('apPassword').value = s.apPassword;
+      document.getElementById('remoteLayout').value = s.remoteLayout;
     }
 
     async function saveSettings() {
@@ -491,8 +716,9 @@
       const mqttBroker = encodeURIComponent(document.getElementById('mqttBroker').value);
       const mqttPort = encodeURIComponent(document.getElementById('mqttPort').value);
       const apPassword = encodeURIComponent(document.getElementById('apPassword').value);
+      const remoteLayout = encodeURIComponent(document.getElementById('remoteLayout').value);
       document.getElementById('statusLineSettings').textContent = 'Saving, rebooting...';
-      const res = await fetch(`/api/settings-save?pisteNr=${pisteNr}&pisteName=${pisteName}&mqttBroker=${mqttBroker}&mqttPort=${mqttPort}&apPassword=${apPassword}`);
+      const res = await fetch(`/api/settings-save?pisteNr=${pisteNr}&pisteName=${pisteName}&mqttBroker=${mqttBroker}&mqttPort=${mqttPort}&apPassword=${apPassword}&remoteLayout=${remoteLayout}`);
       if (!res.ok) {
         document.getElementById('statusLineSettings').textContent = 'Failed: ' + await res.text();
         return;

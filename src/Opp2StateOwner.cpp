@@ -268,6 +268,36 @@ void Opp2StateOwner::resetRedCards() {
     publishScore();
 }
 
+void Opp2StateOwner::incrementPCard(OPP2::Side side) {
+    uint8_t& card =
+        side == OPP2::Side::LEFT ? m_state.uw2f.left.p_card : m_state.uw2f.right.p_card;
+    if (card >= 5) return;
+    ++card;
+
+    snapshotUW2FBeforeReset();
+    m_uw2fBaseMs          = 0;
+    m_uw2fRunSinceMs      = millis();
+    m_state.uw2f.time_ms  = 0;
+    publishUW2F();
+}
+
+void Opp2StateOwner::undoPCard(OPP2::Side side) {
+    uint8_t& card =
+        side == OPP2::Side::LEFT ? m_state.uw2f.left.p_card : m_state.uw2f.right.p_card;
+    if (card == 0) return;
+    --card;
+    publishUW2F();
+}
+
+void Opp2StateOwner::restoreUW2FTimer() {
+    if (!m_uw2fHasSnapshot) return;
+    m_uw2fBaseMs         = m_uw2fBaseMsBeforeReset;
+    m_uw2fRunSinceMs     = millis();
+    m_uw2fHasSnapshot    = false;
+    m_state.uw2f.time_ms = m_uw2fBaseMs;
+    publishUW2F();
+}
+
 void Opp2StateOwner::armPostResetCleanup() { m_awaitingResetConfirmation = true; }
 
 void Opp2StateOwner::armYellowClear(OPP2::Side side) {
@@ -417,12 +447,14 @@ void Opp2StateOwner::publishUW2F() {
 
 // Elapsed time since the last valid hit, counting only while the clock is
 // actually running (Favero-reported) -- paused/halted time doesn't accrue
-// passivity. p_card is never touched here (see updateFromFavero); that's
-// left entirely to whoever officiates.
+// passivity. p_card is never touched here (see updateFromFavero) -- it's
+// given/undone locally via incrementPCard()/undoPCard(), driven by the
+// compact remote layout's UW2F control, not derived from Favero telemetry.
 void Opp2StateOwner::tickUW2F(bool running, bool hitOccurred) {
     const uint32_t now = millis();
 
     if (hitOccurred) {
+        snapshotUW2FBeforeReset();
         m_uw2fBaseMs     = 0;
         m_uw2fRunSinceMs = now;
     } else if (running && !m_uw2fRunning) {
@@ -438,6 +470,13 @@ void Opp2StateOwner::tickUW2F(bool running, bool hitOccurred) {
     if (crossedSecond || hitOccurred) {
         publishUW2F();
     }
+}
+
+void Opp2StateOwner::snapshotUW2FBeforeReset() {
+    const uint32_t now = millis();
+    m_uw2fBaseMsBeforeReset =
+        m_uw2fBaseMs + (m_uw2fRunning ? (now - m_uw2fRunSinceMs) : 0);
+    m_uw2fHasSnapshot = true;
 }
 
 void Opp2StateOwner::publishControl(OPP2::Command command) {
@@ -497,6 +536,7 @@ void Opp2StateOwner::writeStateJson(char* buf, size_t bufSize) const {
     right["white"] = m_state.lights.right.white;
     right["name"] = m_state.fencers.right.fencer.name;
     right["noc"] = m_state.fencers.right.fencer.nation;
+    right["p_card"] = m_state.uw2f.right.p_card;
 
     JsonObject left = doc["left"].to<JsonObject>();
     left["score"] = m_state.score.left.score;
@@ -506,8 +546,12 @@ void Opp2StateOwner::writeStateJson(char* buf, size_t bufSize) const {
     left["white"] = m_state.lights.left.white;
     left["name"] = m_state.fencers.left.fencer.name;
     left["noc"] = m_state.fencers.left.fencer.nation;
+    left["p_card"] = m_state.uw2f.left.p_card;
 
     doc["priority"] = static_cast<int>(m_state.score.priority);
+
+    JsonObject uw2f = doc["uw2f"].to<JsonObject>();
+    uw2f["time_ms"] = m_state.uw2f.time_ms;
 
     serializeJson(doc, buf, bufSize);
 }

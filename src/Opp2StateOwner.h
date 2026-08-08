@@ -117,6 +117,28 @@ public:
     /// if so.
     void armPostResetCleanup();
 
+    /// Gives a UW2F P-card to `side`: increments m_state.uw2f.<side>.p_card
+    /// (capped at 5, per opp2_types.h's "1-5 ordinal position per
+    /// rulebook") and resets the passivity timer, same as a hit does --
+    /// explicit decision: giving a card is itself an enforcement event.
+    /// Purely local/OPP2 state -- the Favero has no way to display this at
+    /// all, so unlike every IR-backed action in this class, there is
+    /// nothing for a caller to also send over IR here.
+    void incrementPCard(OPP2::Side side);
+
+    /// Undoes the last P-card given on `side` (decrements, never below 0).
+    /// Does NOT restore the passivity timer -- that's the separate
+    /// restoreUW2FTimer() below, matching how giving/undoing a card and
+    /// undoing a timer reset are two distinct controls on the physical
+    /// remote this mirrors.
+    void undoPCard(OPP2::Side side);
+
+    /// Restores the passivity timer to what it was immediately before the
+    /// most recent reset (from a hit or incrementPCard()) -- a
+    /// single-level undo. No-op if nothing has reset the timer since the
+    /// last restore (or since boot).
+    void restoreUW2FTimer();
+
     /// Publishes connection (LWT counterpart) -- call with true once MQTT
     /// connects, the broker publishes {"online":false} itself via LWT on
     /// unexpected disconnect.
@@ -150,6 +172,13 @@ private:
     /// accruing only while `running` (the Favero-reported clock state) is
     /// true. Favero has no concept of this at all -- see updateFromFavero().
     void tickUW2F(bool running, bool hitOccurred);
+
+    /// Banks the current elapsed passivity time into
+    /// m_uw2fBaseMsBeforeReset and arms m_uw2fHasSnapshot, right before
+    /// something is about to zero the timer (a hit, in tickUW2F(), or
+    /// incrementPCard()) -- the single piece of state restoreUW2FTimer()
+    /// needs to undo exactly one such reset.
+    void snapshotUW2FBeforeReset();
 
     static OPP2::Priority derivePriority(const FaveroFrame& f);
     static bool checkSerialize(OPP2::SerializeError err, const char* what);
@@ -189,6 +218,11 @@ private:
     uint32_t m_uw2fBaseMs     = 0;      // banked elapsed ms from prior running segments
     uint32_t m_uw2fRunSinceMs = 0;      // millis() when the current running segment started
     bool     m_uw2fRunning    = false;  // running state as of the last tick
+
+    // See snapshotUW2FBeforeReset()/restoreUW2FTimer(): single-level undo
+    // for the most recent timer reset (hit or P-card given).
+    uint32_t m_uw2fBaseMsBeforeReset = 0;
+    bool     m_uw2fHasSnapshot       = false;
 
     // Previous frame's raw Favero red-card bits, to detect a false->true
     // edge (a card being given) independently of m_state.score.*.red_cards,
