@@ -11,6 +11,48 @@ h1 {
   color: #0F3376;
   padding: 2vh;
 }
+
+/* Hidden by default; the @media rule below is the only thing that ever
+   shows it, so it always tracks live orientation with no JS required.
+   Sits above everything (including nav and any fullscreen content) via a
+   high z-index, and blocks interaction with the page underneath simply by
+   covering it -- landscape use of this app isn't supported, so there's
+   nothing useful to leave reachable behind it. */
+.rotate-overlay {
+  display: none;
+}
+@media (orientation: landscape) {
+  .rotate-overlay {
+    display: flex;
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    background-color: black;
+    color: white;
+    padding: 24px;
+    box-sizing: border-box;
+  }
+}
+.rotate-overlay p {
+  font-size: 20px;
+}
+/* Only relevant on iOS (see IS_IOS in index.html) -- Android either got a
+   real orientation lock already (manifest.json / the Fullscreen button's
+   screen.orientation.lock()) or can be told to just rotate back; iOS has
+   no lock available under any circumstance, so it's the one platform
+   where a same Settings pointer actually helps. */
+.rotate-overlay-ios-hint {
+  display: none;
+  font-size: 15px;
+  color: #ccc;
+  margin-top: 12px;
+}
+body.is-ios .rotate-overlay-ios-hint {
+  display: block;
+}
 p {
   font-size: 24px;
 }
@@ -116,7 +158,7 @@ body.is-fullscreen nav {
 
 section {
   display: flex;
-  width: 101vw;
+  width: 100%;
 }
 
 /* ── OPP2 / Settings pages ────────────────────────────────────────────── */
@@ -269,16 +311,24 @@ section {
 }
 .atlas-score-col-left { align-items: flex-start; }
 .atlas-score-col-right { align-items: flex-end; }
-/* Extra +/- buttons alongside the score, shown only when the screen has
+/* Extra +/- buttons below the score row, shown only when the screen has
    height to spare -- tap/long-press on the score itself (above) always
    works regardless, this is a convenience on top of that, not instead of
    it. Threshold is a judgment call (confirmed 2026-08-08: an iPhone in
    fullscreen clears it comfortably, a very old/small Android doesn't),
-   worth revisiting with more real device data rather than assumption. */
+   worth revisiting with more real device data rather than assumption.
+   Own row rather than nested inside .atlas-score-col, so its width is
+   measured against the full panel width instead of being squeezed
+   against .atlas-center in .atlas-top-row -- space-between here keeps
+   each pair under its own score, matching the columns above. */
+.atlas-pm-row-mini {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 10px;
+}
 .atlas-pm-mini {
   display: none;
-  gap: 6px;
-  margin-top: 6px;
+  gap: 10px;
 }
 @media (min-height: 700px) {
   .atlas-pm-mini {
@@ -290,9 +340,18 @@ section {
   color: #ffffff;
   border: none;
   border-radius: 6px;
-  width: 44px;
-  height: 40px;
-  font-size: 18px;
+  /* Plain fallback first for engines without clamp()/min() (dropped
+     wholesale, same reasoning as the vh/dvh pair above); clamp() second
+     to override it where supported. Formula reserves .atlas-panel's own
+     24px padding plus the two 10px inner gaps within each pm-mini group
+     (44px total), splits what's left four ways (2 buttons x 2 groups),
+     and never goes below 44px -- this class's own size before it was
+     enlarged to 80px, already confirmed to fit. Only shrinks as far as a
+     narrow screen actually forces; stays at the full 80px otherwise. */
+  width: 80px;
+  width: clamp(44px, (min(100vw, 480px) - 44px) / 4, 80px);
+  aspect-ratio: 1 / 1;
+  font-size: 24px;
   cursor: pointer;
   -webkit-touch-callout: none;
   -webkit-user-select: none;
@@ -305,7 +364,7 @@ section {
   text-align: center;
 }
 .atlas-timer {
-  font-size: 34px;
+  font-size: 64px;
   font-weight: bold;
 }
 .atlas-round {
@@ -318,7 +377,7 @@ section {
   background-color: #17375E;
   color: #ffffff;
   border: none;
-  border-radius: 8px;
+  border-radius: 12px;
   padding: 14px;
   margin: 6px 0;
   font-size: 16px;
@@ -330,7 +389,7 @@ section {
   user-select: none;
   touch-action: none;
 }
-.atlas-btn.atlas-wide { width: 100%; }
+.atlas-btn.atlas-wide { width: 80%; }
 .atlas-btn.atlas-danger { background-color: #f44336; }
 .atlas-btn-hero {
   /* Grows to fill leftover space up to a sensible cap -- unbounded
@@ -344,12 +403,12 @@ section {
      two separate fixes for two separate symptoms). min-height keeps it
      generous even on a very short screen. */
   flex: 1 1 auto;
-  max-height: 320px;
+  max-height: 200px;
   min-height: 140px;
   /* Real vertical separation from the secondary row below (not just a
      visual border) -- the referee should never be able to mistake a
      reach for Start/Stop as a reach for Next/Pause or Reset. */
-  margin: 24px 0;
+  margin: 44px 0;
   font-size: 28px;
   font-weight: bold;
 }
@@ -360,14 +419,27 @@ section {
 .atlas-secondary-row {
   display: flex;
   flex: 0 0 auto;
-  width: 66%;
+  width: 90%;
   margin: 0 auto 12px;
-  gap: 8px;
 }
 .atlas-secondary-row .atlas-btn {
   flex: 1;
   width: auto;
+  /* Flex items default to min-width: auto, refusing to shrink below their
+     own text's width -- on a narrow row that would otherwise overflow the
+     row and crowd the buttons together. */
+  min-width: 0;
   margin: 0;
+}
+/* Margin instead of the flex `gap` property -- confirmed on a real device
+   whose browser silently ignores `gap` in a flex container rather than
+   erroring (same class of old/stock Android WebView already known to drop
+   100dvh, see .atlas-panel-main above), which rendered as no space at all
+   between these two buttons. margin has been supported forever, so this
+   sidesteps that gap entirely. Only the second of the two buttons gets it,
+   via the adjacent-sibling selector -- exactly one edge needs spacing. */
+.atlas-secondary-row .atlas-btn + .atlas-btn {
+  margin-left: 14px;
 }
 .atlas-pm-row {
   display: flex;

@@ -1,0 +1,17 @@
+{
+  "name": "Favero_OPP2",
+  "short_name": "Favero_OPP2",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#17375E",
+  "theme_color": "#17375E",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

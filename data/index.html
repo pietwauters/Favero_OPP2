@@ -3,12 +3,31 @@
 <head>
   <meta charset="UTF-8">
   <title>Favero_OPP2</title>
-  <meta name="viewport" content="height=device-height, initial-scale=1">
+  <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1">
   <meta name="mobile-web-app-capable" content="yes">
-  <link rel="icon" href="data:,">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon-192.png">
+  <!-- iOS ignores manifest.json's icons entirely (Apple never adopted that
+       part of the spec) -- this is the only way it picks up a home-screen
+       icon when added via Safari's "Add to Home Screen". -->
+  <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="stylesheet" type="text/css" href="style.css">
 </head>
 <body>
+
+  <!-- Shown only via the @media (orientation: landscape) rule in style.css
+       -- catches every case the Android-only locking above can't: iOS
+       always (WebKit never implemented orientation lock at all, see the
+       Fullscreen block below), and any Android device that's neither
+       installed to the home screen (manifest.json's orientation field)
+       nor currently in fullscreen (screen.orientation.lock()). -->
+  <div id="rotateOverlay" class="rotate-overlay">
+    <div>
+      <p>Please rotate your device to portrait.</p>
+      <p class="rotate-overlay-ios-hint">On iPhone/iPad, this can't be locked automatically --
+        enable Rotation Lock in Control Center while using this page.</p>
+    </div>
+  </div>
 
   <section id="view-remote" class="view">
     <!-- Classic: the full FA-05 button grid, unchanged. Compact (below):
@@ -57,14 +76,6 @@
         <div class="atlas-top-row">
           <div class="atlas-score-col atlas-score-col-left">
             <div id="btnScoreLeft" class="atlas-score atlas-score-left leftScore">--</div>
-            <!-- Extra convenience only -- hidden by default (see
-                 .atlas-pm-mini, shown above a min-height breakpoint), the
-                 score itself (bindLongPress above) is always the primary
-                 +/- control regardless of screen size. -->
-            <div class="atlas-pm-mini">
-              <button class="atlas-mini-btn" onclick="faveroAction('/FaveroPlusLeft')">+</button>
-              <button class="atlas-mini-btn" onclick="faveroAction('/FaveroMinusLeft')">-</button>
-            </div>
           </div>
           <div class="atlas-center">
             <div class="atlas-timer clock">-:--</div>
@@ -72,10 +83,24 @@
           </div>
           <div class="atlas-score-col atlas-score-col-right">
             <div id="btnScoreRight" class="atlas-score atlas-score-right rightScore">--</div>
-            <div class="atlas-pm-mini">
-              <button class="atlas-mini-btn" onclick="faveroAction('/FaveroPlusRight')">+</button>
-              <button class="atlas-mini-btn" onclick="faveroAction('/FaveroMinusRight')">-</button>
-            </div>
+          </div>
+        </div>
+
+        <!-- Extra convenience only -- hidden by default (see .atlas-pm-mini,
+             shown above a min-height breakpoint), the score itself
+             (bindLongPress above) is always the primary +/- control
+             regardless of screen size. Own row below the score/timer/round
+             row rather than nested under each score, so it isn't squeezed
+             against .atlas-center's width -- space-between keeps each pair
+             under its own score. -->
+        <div class="atlas-pm-row-mini">
+          <div class="atlas-pm-mini">
+            <button class="atlas-mini-btn" onclick="faveroAction('/FaveroPlusLeft')">+</button>
+            <button class="atlas-mini-btn" onclick="faveroAction('/FaveroMinusLeft')">-</button>
+          </div>
+          <div class="atlas-pm-mini">
+            <button class="atlas-mini-btn" onclick="faveroAction('/FaveroPlusRight')">+</button>
+            <button class="atlas-mini-btn" onclick="faveroAction('/FaveroMinusRight')">-</button>
           </div>
         </div>
 
@@ -317,6 +342,16 @@
     // is UX convenience (hide views this client structurally can't use),
     // not a security boundary -- the AP's WPA2 password is the real one.
     const IS_AP_CLIENT = (location.hostname === '192.168.4.1');
+
+    // iPadOS 13+ reports as "MacIntel" in the UA string (deliberately, to
+    // get desktop-site behavior by default) -- maxTouchPoints is what
+    // actually distinguishes it from a real Mac. Used only to show the
+    // iOS-specific Control Center hint in the rotate-overlay below; see
+    // the Fullscreen block further down for why no JS orientation lock is
+    // even attempted on this platform.
+    const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    document.body.classList.toggle('is-ios', IS_IOS);
     // Repeater/OPP2 need live MQTT-backed state this client has no route
     // to -- Settings has no such dependency and is where pisteNr (which
     // drives this device's own AP SSID) and apPassword live, so it stays
@@ -404,12 +439,30 @@
       // way in and out. Only helps on engines where fullscreen actually
       // works (see the iOS Safari gap noted above); harmless no-op
       // otherwise since fullscreenchange just never fires there.
+      //
+      // Also opportunistically locks orientation to portrait here. The
+      // Screen Orientation API's lock() only succeeds while the document
+      // is actually in fullscreen (per spec, on browsers that implement it
+      // at all) -- WebKit/Safari never implemented lock() regardless, so
+      // this is a real no-op on iOS in every case, home-screen-installed
+      // or not (manifest.json's own "orientation": "portrait" is the
+      // Android equivalent for that path, not usable from here). The CSS
+      // rotate-overlay below is what actually covers iOS.
+      function syncOrientationLock(inFullscreen) {
+        if (!screen.orientation) return;
+        if (inFullscreen && screen.orientation.lock) {
+          screen.orientation.lock('portrait').catch(function () {});
+        } else if (!inFullscreen && screen.orientation.unlock) {
+          try { screen.orientation.unlock(); } catch (e) {}
+        }
+      }
       ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange']
         .forEach(function (evt) {
           document.addEventListener(evt, function () {
             const inFullscreen = !!currentFsElement();
             btn.textContent = inFullscreen ? 'Exit fullscreen' : 'Fullscreen';
             document.body.classList.toggle('is-fullscreen', inFullscreen);
+            syncOrientationLock(inFullscreen);
           });
         });
     })();
