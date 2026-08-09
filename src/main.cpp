@@ -239,6 +239,16 @@ void setupWebServer() {
         g_opp2.resetRedCards();       // "Mise a zero" -- a genuinely new bout
         g_opp2.armPostResetCleanup(); // Mise a zero doesn't clear yellow/priority itself
     });
+    // Long-press Reset on the compact remote layout only (classic grid's
+    // Mise a zero button above stays a single one-shot press) -- the full
+    // Mise a zero -> confirm score 0 -> clear cards/priority -> Set
+    // (confirm clock 3:00) -> MatchCount (confirm round 1) sequence, each
+    // step confirmed via telemetry before advancing. See
+    // Opp2StateOwner::armFullReset().
+    addFaveroIrRoute("/FaveroFullReset", []() {
+        g_faveroIr.reset();
+        g_opp2.armFullReset();
+    });
     addFaveroIrRoute("/FaveroPlusRight", []() { g_faveroIr.scorePlusRight(); });
     addFaveroIrRoute("/FaveroRedLeft", []() { g_faveroIr.redCardLeft(); });
     addFaveroIrRoute("/FaveroSet", []() { g_faveroIr.set(); });
@@ -466,6 +476,11 @@ void setup() {
         }
     });
     g_opp2.setPriorityClearCallback([]() { g_faveroIr.prioMan(); });
+    // The two extra IR sends the long-press "full reset" sequence needs
+    // (Opp2StateOwner::armFullReset()) -- same no-FaveroIR-dependency
+    // reasoning as the two callbacks above.
+    g_opp2.setSetCommandCallback([]() { g_faveroIr.set(); });
+    g_opp2.setMatchCountCallback([]() { g_faveroIr.matchCount(); });
 
     Serial2.begin(2400, SERIAL_8N1, FAVERO_RX_PIN, FAVERO_TX_PIN);
     g_decoder.setCallback(onFaveroFrame);

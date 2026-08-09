@@ -47,6 +47,12 @@ public:
     void setYellowClearCallback(favero_ir_side_cb_t cb);
     void setPriorityClearCallback(favero_ir_cb_t cb);
 
+    /// Wires the two additional IR sends the long-press "full reset"
+    /// sequence needs beyond the two above -- see armFullReset(). Same
+    /// reasoning: this class has no FaveroIR dependency of its own.
+    void setSetCommandCallback(favero_ir_cb_t cb);
+    void setMatchCountCallback(favero_ir_cb_t cb);
+
     void updateFromFavero(const FaveroFrame& frame);
 
     void setApparatusState(OPP2::ApparatusState state);
@@ -116,6 +122,26 @@ public:
     /// or priority are still asserted, firing the corresponding callback
     /// if so.
     void armPostResetCleanup();
+
+    /// Arms the long-press "full reset" sequence (compact remote layout's
+    /// Reset button, /FaveroFullReset in main.cpp -- NOT the classic
+    /// grid's plain Mise a zero button, which stays a single one-shot
+    /// FaveroReset press): once Mise a zero is confirmed via telemetry
+    /// (score reads 0-0, reusing armPostResetCleanup()'s existing
+    /// yellow/priority-clear logic), also resets red cards and P-cards;
+    /// once yellow/priority settle, sends Set (confirmed against the
+    /// clock reading 3:00) and then MatchCount repeatedly (confirmed
+    /// against the round reading 1). Every step is confirmed against live
+    /// telemetry before advancing -- same no-feedback-path caution as
+    /// every other corrective IR action in this class. Re-arming while a
+    /// previous sequence is still in progress simply restarts it.
+    void armFullReset();
+
+    /// Zeroes both sides' UW2F P-card counts. Nothing else ever resets
+    /// these (undoPCard() only decrements one at a time) -- called from
+    /// the full-reset sequence above, since a fresh bout shouldn't carry
+    /// over stale passivity cards from before the reset.
+    void resetPCards();
 
     /// Gives a UW2F P-card to `side`: increments m_state.uw2f.<side>.p_card
     /// (capped at 5, per opp2_types.h's "1-5 ordinal position per
@@ -205,6 +231,46 @@ private:
     void armPriorityClear();
     void driveYellowClearRetry(OPP2::Side side, bool currentlyLit);
     void drivePriorityClearRetry(bool currentlyAsserted);
+
+    /// See armFullReset(). AWAITING_ZERO_SCORE/AWAITING_CARDS_AND_
+    /// PRIORITY_CLEAR are driven directly in updateFromFavero() (the
+    /// conditions they wait on -- score, and the existing yellow/priority
+    /// retry state -- are already right there); AWAITING_SET_CONFIRM and
+    /// CYCLING_ROUND each get their own small driver below since their
+    /// confirm conditions and give-up behavior differ from the generic
+    /// PendingIrRetry pattern above.
+    enum class FullResetPhase : uint8_t {
+        IDLE,
+        AWAITING_ZERO_SCORE,
+        AWAITING_CARDS_AND_PRIORITY_CLEAR,
+        AWAITING_SET_CONFIRM,
+        CYCLING_ROUND,
+    };
+    /// Unlike driveYellowClearRetry()/drivePriorityClearRetry() (skip
+    /// sending entirely if the condition doesn't currently need
+    /// correcting), this always sends Set at least once -- the referee
+    /// asked for it to be sent as part of the sequence, not only if the
+    /// clock doesn't already happen to read 3:00.
+    void driveFullResetSetStep(bool clockAtThreeMinutes);
+    /// This one DOES skip sending if the round already reads 1 -- "send
+    /// MatchCount until round is 1" is naturally satisfied with zero
+    /// sends if it's already there.
+    void driveFullResetRoundStep(uint8_t currentRound);
+
+    FullResetPhase m_fullResetPhase = FullResetPhase::IDLE;
+    PendingIrRetry m_setRetry;
+    PendingIrRetry m_roundCycleRetry;
+    // Generous safety valve against a runaway loop (e.g. a decode
+    // desync that never reflects numMatches changing at all) -- NOT a
+    // verified real bound on how many MatchCount presses the Favero's
+    // own round-cycle actually needs to wrap back to 1, unlike
+    // kIrMaxAttempts above (measured against real corrective-send
+    // behavior). Worth revisiting against real hardware if this ever
+    // gives up before reaching 1 in practice.
+    static constexpr uint8_t kRoundCycleMaxAttempts = 12;
+
+    favero_ir_cb_t m_onNeedSet;
+    favero_ir_cb_t m_onNeedMatchCount;
 
     Esp32MqttClient* m_mqtt = nullptr;
     uint32_t         m_seq  = 0;

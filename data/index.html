@@ -580,9 +580,12 @@
       { tapUrl: '/Opp2UW2FCardRight', longUrl: '/Opp2UndoUW2FCardRight', longFeedbackMs: 200 });
     // Reset: tap only warns (mirrors the Atlas remote this layout is
     // modeled on -- accidental taps shouldn't zero the match), long-press
-    // actually fires it.
+    // fires the full automated sequence (Mise a zero -> cards/priority ->
+    // Set -> MatchCount until round 1 -- see Opp2StateOwner::
+    // armFullReset()), not just the plain one-shot reset the classic
+    // grid's own Mise a zero button still uses.
     bindLongPress(document.getElementById('btnCompactReset'), {
-      longUrl: '/FaveroReset', longFeedbackMs: 200,
+      longUrl: '/FaveroFullReset', longFeedbackMs: 200,
       onTap: function () {
         const el = document.getElementById('statusLineCompactMain');
         el.textContent = 'Long-press to reset';

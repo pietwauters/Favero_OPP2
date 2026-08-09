@@ -26,6 +26,14 @@ void Opp2StateOwner::setPriorityClearCallback(favero_ir_cb_t cb) {
     m_onNeedPriorityClear = std::move(cb);
 }
 
+void Opp2StateOwner::setSetCommandCallback(favero_ir_cb_t cb) {
+    m_onNeedSet = std::move(cb);
+}
+
+void Opp2StateOwner::setMatchCountCallback(favero_ir_cb_t cb) {
+    m_onNeedMatchCount = std::move(cb);
+}
+
 void Opp2StateOwner::publish(OPP2::Publisher pub, OPP2::MessageType mt,
                               const char* json, int qos, bool retained) {
     if (!m_mqtt) return;
@@ -121,6 +129,30 @@ void Opp2StateOwner::updateFromFavero(const FaveroFrame& f) {
     driveYellowClearRetry(OPP2::Side::LEFT, f.yellowCardLeft);
     driveYellowClearRetry(OPP2::Side::RIGHT, f.yellowCardRight);
     drivePriorityClearRetry(prio != OPP2::Priority::NONE);
+
+    // ── Full reset sequence (long-press Reset on the compact remote) ─────
+    // See armFullReset()/FullResetPhase. The first two phases are driven
+    // directly here since their conditions are already right there (this
+    // frame's score, and the yellow/priority retry state just driven
+    // above); the last two get their own small drivers below.
+    if (m_fullResetPhase == FullResetPhase::AWAITING_ZERO_SCORE &&
+        f.rightScore == 0 && f.leftScore == 0) {
+        resetRedCards();
+        resetPCards();
+        m_fullResetPhase = FullResetPhase::AWAITING_CARDS_AND_PRIORITY_CLEAR;
+        Serial.println("[fullreset] score confirmed 0-0 -- cards/P-cards reset, "
+                        "entering AWAITING_CARDS_AND_PRIORITY_CLEAR");
+    }
+    if (m_fullResetPhase == FullResetPhase::AWAITING_CARDS_AND_PRIORITY_CLEAR &&
+        !m_yellowClearRetryLeft.armed && !m_yellowClearRetryRight.armed &&
+        !m_priorityClearRetry.armed) {
+        m_fullResetPhase = FullResetPhase::AWAITING_SET_CONFIRM;
+        m_setRetry = PendingIrRetry{};  // nextRetryAtMs stays 0 -- fires immediately below
+        Serial.printf("[fullreset] cards/priority settled -- entering AWAITING_SET_CONFIRM "
+                      "(clock currently %u:%02u)\n", f.minutes, f.seconds);
+    }
+    driveFullResetSetStep(f.minutes == 3 && f.seconds == 0);
+    driveFullResetRoundStep(f.numMatches);
 
     // ── Round ────────────────────────────────────────────────────────────
     // numMatches (byte 6, D0-D1) genuinely tracks the bout's period --
@@ -299,6 +331,88 @@ void Opp2StateOwner::restoreUW2FTimer() {
 }
 
 void Opp2StateOwner::armPostResetCleanup() { m_awaitingResetConfirmation = true; }
+
+void Opp2StateOwner::armFullReset() {
+    armPostResetCleanup();  // reuses the existing yellow/priority-clear-after-reset logic
+    m_fullResetPhase = FullResetPhase::AWAITING_ZERO_SCORE;
+    m_setRetry        = PendingIrRetry{};
+    m_roundCycleRetry = PendingIrRetry{};
+    Serial.println("[fullreset] armed -- awaiting score 0-0");
+}
+
+void Opp2StateOwner::resetPCards() {
+    if (m_state.uw2f.left.p_card == 0 && m_state.uw2f.right.p_card == 0) return;
+    m_state.uw2f.left.p_card  = 0;
+    m_state.uw2f.right.p_card = 0;
+    publishUW2F();
+}
+
+// Always sends at least once (attempts starts at 0, so the "already
+// confirmed" branch below can't short-circuit the very first call) --
+// unlike the yellow/priority corrective sends, Set is wanted as an
+// unconditional step in the sequence, not only when the clock doesn't
+// already happen to read 3:00.
+void Opp2StateOwner::driveFullResetSetStep(bool clockAtThreeMinutes) {
+    if (m_fullResetPhase != FullResetPhase::AWAITING_SET_CONFIRM) return;
+    if (clockAtThreeMinutes && m_setRetry.attempts > 0) {
+        Serial.printf("[fullreset] Set confirmed (clock at 3:00) after %u attempt(s) -- "
+                      "entering CYCLING_ROUND\n", m_setRetry.attempts);
+        m_setRetry = PendingIrRetry{};
+        m_fullResetPhase = FullResetPhase::CYCLING_ROUND;
+        m_roundCycleRetry = PendingIrRetry{};  // fires immediately below
+        return;
+    }
+    const uint32_t now = millis();
+    if (now < m_setRetry.nextRetryAtMs) return;
+    if (m_setRetry.attempts >= kIrMaxAttempts) {
+        Serial.println("[fullreset] Set gave up after max attempts -- clock never confirmed "
+                        "at 3:00, sequence abandoned");
+        m_fullResetPhase = FullResetPhase::IDLE;  // give up -- referee finishes manually
+        return;
+    }
+    ++m_setRetry.attempts;
+    m_setRetry.nextRetryAtMs = now + kIrRetryIntervalMs;
+    Serial.printf("[fullreset] sending Set (attempt %u/%u)\n", m_setRetry.attempts,
+                  kIrMaxAttempts);
+    if (m_onNeedSet) {
+        m_onNeedSet();
+    } else {
+        Serial.println("[fullreset] WARNING: onNeedSet callback not wired -- "
+                        "setSetCommandCallback() was never called");
+    }
+}
+
+// Opposite of the above: skips sending entirely once the round already
+// reads 1 -- "send MatchCount until round is 1" is naturally satisfied
+// with zero sends if it's already there.
+void Opp2StateOwner::driveFullResetRoundStep(uint8_t currentRound) {
+    if (m_fullResetPhase != FullResetPhase::CYCLING_ROUND) return;
+    if (currentRound == 1) {
+        Serial.printf("[fullreset] round confirmed at 1 after %u attempt(s) -- sequence "
+                      "complete\n", m_roundCycleRetry.attempts);
+        m_roundCycleRetry = PendingIrRetry{};
+        m_fullResetPhase = FullResetPhase::IDLE;  // sequence complete
+        return;
+    }
+    const uint32_t now = millis();
+    if (now < m_roundCycleRetry.nextRetryAtMs) return;
+    if (m_roundCycleRetry.attempts >= kRoundCycleMaxAttempts) {
+        Serial.println("[fullreset] MatchCount gave up after max attempts -- round never "
+                        "confirmed at 1, sequence abandoned");
+        m_fullResetPhase = FullResetPhase::IDLE;  // give up -- referee finishes manually
+        return;
+    }
+    ++m_roundCycleRetry.attempts;
+    m_roundCycleRetry.nextRetryAtMs = now + kIrRetryIntervalMs;
+    Serial.printf("[fullreset] sending MatchCount (attempt %u/%u, round currently %u)\n",
+                  m_roundCycleRetry.attempts, kRoundCycleMaxAttempts, currentRound);
+    if (m_onNeedMatchCount) {
+        m_onNeedMatchCount();
+    } else {
+        Serial.println("[fullreset] WARNING: onNeedMatchCount callback not wired -- "
+                        "setMatchCountCallback() was never called");
+    }
+}
 
 void Opp2StateOwner::armYellowClear(OPP2::Side side) {
     PendingIrRetry& retry =
