@@ -76,7 +76,10 @@ nav a {
 nav a.active {
   background-color: #008CBA;
 }
-nav button.fullscreen-btn {
+/* Not scoped to "nav" anymore -- this button now lives on the Settings
+   page (compact layout moved it out of #topNav entirely, see
+   index.html), not inside a <nav>. */
+.fullscreen-btn {
   color: white;
   background-color: #333;
   border: none;
@@ -86,12 +89,91 @@ nav button.fullscreen-btn {
   cursor: pointer;
 }
 
-/* While actually in fullscreen, the nav (Remote/Repeater/OPP2/Settings/
-   Fullscreen) is pure overhead -- hidden entirely so the compact layout's
-   Start/Stop can claim that space instead. Toggled by the fullscreenchange
-   listener above, not a separate control. */
+/* While actually in fullscreen, the nav (#topNav for classic,
+   #bottomNav for compact -- see body.compact-nav below) is pure overhead
+   -- hidden entirely so the compact layout's Start/Stop can claim that
+   space instead. Toggled by the fullscreenchange listener above, not a
+   separate control. */
 body.is-fullscreen nav {
   display: none;
+}
+
+/* Compact-layout-only bottom navigation (see applyCompactPosition() /
+   updateCompactBottomNav() in index.html) -- #topNav (Remote/Repeater/
+   OPP2/Settings links) is unused here, #bottomNav takes over instead.
+   :not(.is-fullscreen) rather than relying on cascade/specificity against
+   "body.is-fullscreen nav" above -- baking the exclusion directly into
+   this selector is unambiguous regardless of class/rule ordering, unlike
+   trying to out-specificity-fight that rule. */
+body.compact-nav #topNav {
+  display: none;
+}
+body.compact-nav:not(.is-fullscreen) .bottom-nav {
+  display: flex;
+}
+.bottom-nav {
+  display: none;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 500;
+  justify-content: space-between;
+  align-items: center;
+}
+.bottom-nav-btn {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* No visible button chrome -- just the icon itself is clickable, sitting
+     directly on #bottomNav's own dark background (inherited from the bare
+     "nav" rule). Padding is kept (not removed along with the background)
+     purely to preserve a large-enough tap target -- shrinking it down to
+     the icon's own small clamp()'d size would make this fiddly to hit
+     accurately on a real device. */
+  background-color: transparent;
+  border: none;
+  padding: 14px 10px;
+  cursor: pointer;
+}
+/* Native intrinsic sizing (each source PNG is a plain 40x40 square) does
+   the aspect-ratio job here, unlike the aspect-ratio CSS property used
+   elsewhere in this file (and confirmed unsupported on a real device) --
+   an <img> with only width set keeps its own ratio in every browser,
+   ancient or not, no CSS property required at all. */
+.bottom-nav-btn img {
+  display: block;
+  width: 26px;
+  width: clamp(22px, 7vw, 32px);
+  height: auto;
+}
+/* Margin instead of the flex `gap` property -- confirmed unsupported on
+   at least one real device tested against this project (silently ignored
+   rather than erroring), see .atlas-secondary-row's own fix above. */
+.bottom-nav-btn + .bottom-nav-btn {
+  margin-left: 8px;
+}
+.bottom-nav-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+/* No background box anymore (see .bottom-nav-btn above) -- the earlier
+   #008CBA-vs-icon-blue contrast problem that motivated one is moot now
+   that there's no box to color. Slightly wider flex-basis only, giving
+   the primary action a marginally larger tap target than prev/next. */
+.bottom-nav-center {
+  flex: 1.3;
+}
+/* Clearance from the fixed bottom nav above -- without this, its last
+   row (e.g. Penalties' row 8, or Settings' own Save button) would sit
+   partly hidden behind the bar. Covers every compact sub-page (.atlas-
+   panel) and the Repeater/OPP2/Settings pages (.panel) alike, since the
+   bottom nav now spans all of them. */
+body.compact-nav .panel,
+body.compact-nav .atlas-panel {
+  padding-bottom: 72px;
 }
 
 .view {
@@ -348,9 +430,16 @@ section {
      and never goes below 44px -- this class's own size before it was
      enlarged to 80px, already confirmed to fit. Only shrinks as far as a
      narrow screen actually forces; stays at the full 80px otherwise. */
+  /* height duplicates the width clamp rather than using aspect-ratio --
+     confirmed on a real device (2026-08-09, the same class of old/small
+     Android already flagged elsewhere in this file for dvh/flex-gap gaps)
+     that aspect-ratio is silently unsupported there too: with only width
+     set, an empty/short-content flex item has nothing else to derive a
+     height from and collapses to a thin stripe instead of a square. */
   width: 80px;
   width: clamp(44px, (min(100vw, 480px) - 44px) / 4, 80px);
-  aspect-ratio: 1 / 1;
+  height: 80px;
+  height: clamp(44px, (min(100vw, 480px) - 44px) / 4, 80px);
   font-size: 24px;
   cursor: pointer;
   -webkit-touch-callout: none;
@@ -390,6 +479,20 @@ section {
   touch-action: none;
 }
 .atlas-btn.atlas-wide { width: 80%; }
+/* UW2F/PRIO/Undo-Timer-Reset (compact Penalties page): sized to their own
+   text via padding, not a fixed-percentage bar -- .atlas-wide's flat 80%
+   looked arbitrary for short labels and wasn't actually centered either
+   (.atlas-btn's own margin: 6px 0 has no auto component, so an 80%-wide
+   block sat flush against the left edge). display:inline-block relies on
+   the inherited text-align:center already set on html at the top of this
+   file -- same mechanism every other inline-block element on this page
+   already centers by. */
+.atlas-btn-auto {
+  display: inline-block;
+  width: auto;
+  padding-left: 28px;
+  padding-right: 28px;
+}
 .atlas-btn.atlas-danger { background-color: #f44336; }
 .atlas-btn-hero {
   /* Grows to fill leftover space up to a sensible cap -- unbounded
@@ -441,43 +544,122 @@ section {
 .atlas-secondary-row .atlas-btn + .atlas-btn {
   margin-left: 14px;
 }
-.atlas-pm-row {
+/* Compact Penalties page, rows 1 and 5: live status squares (not
+   buttons) -- row 1 for the Favero-driven normal cards, row 5 for the
+   UW2F P-card's own escalation stage, same mirrored Y-R-B-B-R-Y layout
+   for both (see index.html's cardStatusSeverity()/pCardSeverity()/
+   setCardStatusTrio()). Sized with clamp() like .atlas-mini-btn above --
+   six of these across one row is exactly the kind of width squeeze that
+   caused the compact layout's original overflow bugs, so this gets the
+   same shrink-only-if-needed treatment instead of a fixed size. Formula
+   reserves .atlas-status-row's own 10% side margins plus 5 small inter-
+   square gaps, split six ways. */
+.atlas-status-row {
   display: flex;
   justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 8px;
+  width: 90%;
+  margin: 8px auto;
 }
-.atlas-pm-col {
-  flex: 1;
-}
-.atlas-pm-col .atlas-btn { margin: 4px 0; }
-/* Android's card buttons are left-edge-aligned under the left column,
-   right-edge under the right -- not centered in their column. */
-.atlas-pm-col:last-child .atlas-badge {
-  margin-left: auto;
-}
-.atlas-badge {
-  width: 56px;
-  height: 44px;
-  padding: 0;
-  border-radius: 10%;
-  font-size: 16px;
+.atlas-status-sq {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* height duplicates the width clamp rather than using aspect-ratio --
+     see .atlas-mini-btn above for why: unsupported on a real device,
+     and these squares have no/short text content, so with only a width
+     set they collapsed to thin stripes instead of squares. */
+  width: 32px;
+  width: clamp(20px, (min(100vw, 480px) * 0.9 - 40px) / 6, 32px);
+  height: 32px;
+  height: clamp(20px, (min(100vw, 480px) * 0.9 - 40px) / 6, 32px);
+  border-radius: 15%;
+  font-size: 12px;
   font-weight: bold;
+  /* Dim/outline by default -- an unlit square reads as "off" like a real
+     LED, not just a smaller/absent version of the lit one. Lit color
+     comes entirely from the .lit variants below. */
+  background-color: #222;
+  border: 1px solid #444;
+  color: #000000;
+}
+.atlas-status-sq-yellow.lit { background-color: #FFEB3B; border-color: #FFEB3B; }
+.atlas-status-sq-red.lit    { background-color: #f44336; border-color: #f44336; color: #ffffff; }
+/* Black needs an explicit border even when lit -- html's own page
+   background is already black (see top of file), so a plain black square
+   would be invisible with no border at all. */
+.atlas-status-sq-black.lit  { background-color: #000000; border-color: #ffffff; color: #ffffff; }
+
+/* Rows 2-4: one row per card type (Y/R/B), left+right side by side. Same
+   overflow-safety fixes as .atlas-secondary-row above (min-width:0,
+   margin-based gap instead of the flex `gap` property -- confirmed
+   silently unsupported on at least one real device tested against this
+   project, see the fix history above). */
+.atlas-give-row {
+  display: flex;
+  width: 90%;
+  margin: 0 auto 8px;
+}
+.atlas-give-row .atlas-give-btn {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+  margin: 0;
+  padding: 10px;
+  border-radius: 10%;
+  font-size: 18px;
+  font-weight: bold;
+}
+.atlas-give-row .atlas-give-btn + .atlas-give-btn {
+  margin-left: 14px;
+}
+/* Yellow, once a side already has a red card -- see main.cpp's
+   /FaveroYellowLeft|Right guard and poll()'s disabled toggle. */
+.atlas-give-row .atlas-give-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 .atlas-badge-yellow { background-color: #FFEB3B; color: #000000; }
 .atlas-badge-red { background-color: #f44336; color: #000000; }
+.atlas-badge-black { background-color: #000000; color: #ffffff; border: 2px solid #888; }
+
+/* Row 7: priority draw. The button is sized to its own text (see
+   .atlas-btn-auto below) with the group centered as a whole via
+   justify-content -- not flex:1, which stretched it to fill the row
+   regardless of how short "PRIO" actually is. The squares (left=red,
+   right=green, matching the Repeater/OPP2 scoreboard's own lamp
+   convention) are only actually visible on whichever side currently has
+   priority -- visibility:hidden (not display:none) so the layout doesn't
+   jump when neither/either side lights up. No flex `gap` here either --
+   the button's own margin provides the spacing on both sides. */
 .atlas-prio-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
 }
-.atlas-prio-row .atlas-btn { flex: 1; }
-.atlas-prio-indicator {
-  width: 20px;
-  text-align: center;
-  font-size: 20px;
-  color: #4c8c4a;
+.atlas-prio-row .atlas-btn {
+  flex: 0 0 auto;
+  margin: 6px 14px;
 }
+.atlas-prio-sq {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  /* height duplicates the width clamp rather than using aspect-ratio --
+     see .atlas-mini-btn above for why: unsupported on a real device. */
+  width: 32px;
+  width: clamp(24px, 8vw, 36px);
+  height: 32px;
+  height: clamp(24px, 8vw, 36px);
+  border-radius: 15%;
+  font-size: 14px;
+  font-weight: bold;
+  color: #ffffff;
+  visibility: hidden;
+}
+.atlas-prio-sq.active { visibility: visible; }
+.atlas-prio-sq-left  { background-color: red; }
+.atlas-prio-sq-right { background-color: #2ecc40; }
 
 @media only screen and (max-width: 600px) {
   section { align-items: center !important; }

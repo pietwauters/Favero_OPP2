@@ -143,6 +143,15 @@ public:
     /// over stale passivity cards from before the reset.
     void resetPCards();
 
+    /// Gives/clears a black card on `side` -- OPP2::ScoreState::black_card
+    /// is a plain per-side bool (Section 11), set/cleared purely as local
+    /// state. The Favero has no black-card IR command at all (no such
+    /// button exists on the physical remote), so unlike yellow/red there
+    /// is nothing to also send over IR here -- same reasoning as the
+    /// UW2F P-card methods below.
+    void giveBlackCard(OPP2::Side side);
+    void undoBlackCard(OPP2::Side side);
+
     /// Gives a UW2F P-card to `side`: increments m_state.uw2f.<side>.p_card
     /// (capped at 5, per opp2_types.h's "1-5 ordinal position per
     /// rulebook") and resets the passivity timer, same as a hit does --

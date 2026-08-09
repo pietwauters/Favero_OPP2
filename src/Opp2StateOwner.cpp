@@ -347,6 +347,22 @@ void Opp2StateOwner::resetPCards() {
     publishUW2F();
 }
 
+void Opp2StateOwner::giveBlackCard(OPP2::Side side) {
+    bool& card =
+        side == OPP2::Side::LEFT ? m_state.score.left.black_card : m_state.score.right.black_card;
+    if (card) return;
+    card = true;
+    publishScore();
+}
+
+void Opp2StateOwner::undoBlackCard(OPP2::Side side) {
+    bool& card =
+        side == OPP2::Side::LEFT ? m_state.score.left.black_card : m_state.score.right.black_card;
+    if (!card) return;
+    card = false;
+    publishScore();
+}
+
 // Always sends at least once (attempts starts at 0, so the "already
 // confirmed" branch below can't short-circuit the very first call) --
 // unlike the yellow/priority corrective sends, Set is wanted as an
@@ -646,6 +662,7 @@ void Opp2StateOwner::writeStateJson(char* buf, size_t bufSize) const {
     right["score"] = m_state.score.right.score;
     right["yellow_card"] = m_state.score.right.yellow_card;
     right["red_card"] = m_state.score.right.red_cards > 0;
+    right["black_card"] = m_state.score.right.black_card;
     right["on_target"] = m_state.lights.right.on_target;
     right["white"] = m_state.lights.right.white;
     right["name"] = m_state.fencers.right.fencer.name;
@@ -656,6 +673,7 @@ void Opp2StateOwner::writeStateJson(char* buf, size_t bufSize) const {
     left["score"] = m_state.score.left.score;
     left["yellow_card"] = m_state.score.left.yellow_card;
     left["red_card"] = m_state.score.left.red_cards > 0;
+    left["black_card"] = m_state.score.left.black_card;
     left["on_target"] = m_state.lights.left.on_target;
     left["white"] = m_state.lights.left.white;
     left["name"] = m_state.fencers.left.fencer.name;

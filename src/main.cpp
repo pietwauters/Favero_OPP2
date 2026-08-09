@@ -265,9 +265,33 @@ void setupWebServer() {
     addFaveroIrRoute("/FaveroUndoRedRight", []() {
         if (g_opp2.undoRedCard(OPP2::Side::RIGHT)) g_faveroIr.scoreMinusLeft();
     });
-    addFaveroIrRoute("/FaveroYellowLeft", []() { g_faveroIr.yellowCardLeft(); });
+    // Once a side has an active red card, the Favero's yellow LED bit is
+    // physically ambiguous (lit as the red card's own side effect, not a
+    // real yellow -- see Opp2StateOwner::updateFromFavero()) and this
+    // bridge already stops trusting/reporting it. Sending another yellow
+    // toggle in that state would just flip that side-effect LED for no
+    // meaningful reason, so it's rejected outright rather than silently
+    // corrupting a state the referee can no longer visually distinguish
+    // from a real yellow card. Bypasses addFaveroIrRoute (which always
+    // returns 200) since this needs a conditional response, same reason
+    // addGuardedOpp2Route exists as its own thing rather than a flag.
+    g_server.on("/FaveroYellowLeft", HTTP_GET, [](AsyncWebServerRequest* request) {
+        if (g_opp2.state().score.left.red_cards > 0) {
+            request->send(409, "text/plain", "Red card already given on this side");
+            return;
+        }
+        g_faveroIr.yellowCardLeft();
+        request->send(200, "text/plain", "OK");
+    });
     addFaveroIrRoute("/FaveroMatchCount", []() { g_faveroIr.matchCount(); });
-    addFaveroIrRoute("/FaveroYellowRight", []() { g_faveroIr.yellowCardRight(); });
+    g_server.on("/FaveroYellowRight", HTTP_GET, [](AsyncWebServerRequest* request) {
+        if (g_opp2.state().score.right.red_cards > 0) {
+            request->send(409, "text/plain", "Red card already given on this side");
+            return;
+        }
+        g_faveroIr.yellowCardRight();
+        request->send(200, "text/plain", "OK");
+    });
     addFaveroIrRoute("/FaveroMinusLeft", []() { g_faveroIr.scoreMinusLeft(); });
     addFaveroIrRoute("/FaveroPrioMan", []() { g_faveroIr.prioMan(); });
     addFaveroIrRoute("/FaveroMinusRight", []() { g_faveroIr.scoreMinusRight(); });
@@ -308,17 +332,32 @@ void setupWebServer() {
     // building it this way), it's purely for the app/repeaters/CMS. Not
     // guarded by addGuardedOpp2Route: giving a UW2F card happens mid-bout
     // while the clock is running, same as the existing red/yellow card
-    // routes above.
-    addOpp2Route("/Opp2UW2FCardLeft",
-                  [](AsyncWebServerRequest*) { g_opp2.incrementPCard(OPP2::Side::LEFT); });
-    addOpp2Route("/Opp2UW2FCardRight",
-                  [](AsyncWebServerRequest*) { g_opp2.incrementPCard(OPP2::Side::RIGHT); });
-    addOpp2Route("/Opp2UndoUW2FCardLeft",
-                  [](AsyncWebServerRequest*) { g_opp2.undoPCard(OPP2::Side::LEFT); });
-    addOpp2Route("/Opp2UndoUW2FCardRight",
-                  [](AsyncWebServerRequest*) { g_opp2.undoPCard(OPP2::Side::RIGHT); });
+    // routes above. Single combined route (not per-side) -- the compact
+    // layout's Penalties page gives mutual passivity to both fencers at
+    // once with one button, per explicit design decision.
+    addOpp2Route("/Opp2UW2FCardBoth", [](AsyncWebServerRequest*) {
+        g_opp2.incrementPCard(OPP2::Side::LEFT);
+        g_opp2.incrementPCard(OPP2::Side::RIGHT);
+    });
+    addOpp2Route("/Opp2UndoUW2FCardBoth", [](AsyncWebServerRequest*) {
+        g_opp2.undoPCard(OPP2::Side::LEFT);
+        g_opp2.undoPCard(OPP2::Side::RIGHT);
+    });
     addOpp2Route("/Opp2RestoreUW2FTimer",
                   [](AsyncWebServerRequest*) { g_opp2.restoreUW2FTimer(); });
+
+    // Black card -- local/OPP2 state only, same reasoning as the UW2F
+    // P-cards above: no Favero IR command exists for this at all (no such
+    // button on the physical remote), so unlike yellow/red there's
+    // nothing to also send over IR here.
+    addOpp2Route("/Opp2BlackCardLeft",
+                  [](AsyncWebServerRequest*) { g_opp2.giveBlackCard(OPP2::Side::LEFT); });
+    addOpp2Route("/Opp2BlackCardRight",
+                  [](AsyncWebServerRequest*) { g_opp2.giveBlackCard(OPP2::Side::RIGHT); });
+    addOpp2Route("/Opp2UndoBlackCardLeft",
+                  [](AsyncWebServerRequest*) { g_opp2.undoBlackCard(OPP2::Side::LEFT); });
+    addOpp2Route("/Opp2UndoBlackCardRight",
+                  [](AsyncWebServerRequest*) { g_opp2.undoBlackCard(OPP2::Side::RIGHT); });
 
     // Live state for the OPP2 page's polling loop.
     g_server.on("/api/state", HTTP_GET, [](AsyncWebServerRequest* request) {

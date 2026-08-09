@@ -122,39 +122,76 @@
           <button id="btnCompactReset" class="atlas-btn atlas-danger">Reset</button>
         </div>
 
-        <div class="actionbar">
-          <button onclick="showCompactSubView('penalties')">Penalties -&gt;</button>
-        </div>
         <div id="statusLineCompactMain" class="status-line"></div>
       </div>
     </div>
 
     <div id="remoteCompactPenalties" class="remote-layout">
       <div class="atlas-panel">
-        <div class="actionbar">
-          <button onclick="showCompactSubView('main')">&lt;- Main</button>
+
+        <!-- Row 1: live status of the "normal" (Favero-driven) cards --
+             mirrored Y/R/B squares, most-severe-currently-active one lit
+             per side (matches how yellow gets frozen/ignored once a red
+             is active -- see Opp2StateOwner::updateFromFavero()). -->
+        <div class="atlas-status-row">
+          <span class="atlas-status-sq atlas-status-sq-yellow" id="cardStatusLeftYellow"></span>
+          <span class="atlas-status-sq atlas-status-sq-red" id="cardStatusLeftRed"></span>
+          <span class="atlas-status-sq atlas-status-sq-black" id="cardStatusLeftBlack"></span>
+          <span class="atlas-status-sq atlas-status-sq-black" id="cardStatusRightBlack"></span>
+          <span class="atlas-status-sq atlas-status-sq-red" id="cardStatusRightRed"></span>
+          <span class="atlas-status-sq atlas-status-sq-yellow" id="cardStatusRightYellow"></span>
         </div>
 
-        <div class="atlas-pm-row">
-          <div class="atlas-pm-col">
-            <button id="btnCompactYellowLeft" class="atlas-btn atlas-badge atlas-badge-yellow">Y</button>
-            <button id="btnCompactRedLeft" class="atlas-btn atlas-badge atlas-badge-red">R</button>
-          </div>
-          <div class="atlas-pm-col">
-            <button id="btnCompactYellowRight" class="atlas-btn atlas-badge atlas-badge-yellow">Y</button>
-            <button id="btnCompactRedRight" class="atlas-btn atlas-badge atlas-badge-red">R</button>
-          </div>
+        <!-- Rows 2-4: give a normal card, one row per card type, left and
+             right side by side. Yellow/Red are the existing Favero-backed
+             actions (tap gives, long-press re-toggles/undoes -- see
+             bindLongPress calls below), unchanged. Black is new and
+             purely local -- no Favero IR command exists for it at all. -->
+        <div class="atlas-give-row">
+          <button id="btnCompactYellowLeft" class="atlas-btn atlas-give-btn atlas-badge-yellow">Y</button>
+          <button id="btnCompactYellowRight" class="atlas-btn atlas-give-btn atlas-badge-yellow">Y</button>
+        </div>
+        <div class="atlas-give-row">
+          <button id="btnCompactRedLeft" class="atlas-btn atlas-give-btn atlas-badge-red">R</button>
+          <button id="btnCompactRedRight" class="atlas-btn atlas-give-btn atlas-badge-red">R</button>
+        </div>
+        <div class="atlas-give-row">
+          <button id="btnCompactBlackLeft" class="atlas-btn atlas-give-btn atlas-badge-black">B</button>
+          <button id="btnCompactBlackRight" class="atlas-btn atlas-give-btn atlas-badge-black">B</button>
         </div>
 
-        <button id="btnUW2FLeft" class="atlas-btn atlas-wide">UW2F Left (<span class="pcardLeft">0</span>)</button>
-        <button id="btnUW2FRight" class="atlas-btn atlas-wide">UW2F Right (<span class="pcardRight">0</span>)</button>
+        <!-- Row 5: same layout as row 1, but for the UW2F P-card's own
+             escalation stage (ordinal 1-5, bucketed onto the same
+             yellow/red/black language: 1-2=yellow, 3-4=red, 5=black) --
+             "P" marks these as the P-card track, distinct from row 1's
+             normal cards. -->
+        <div class="atlas-status-row">
+          <span class="atlas-status-sq atlas-status-sq-yellow" id="pcardStatusLeftYellow">P</span>
+          <span class="atlas-status-sq atlas-status-sq-red" id="pcardStatusLeftRed">P</span>
+          <span class="atlas-status-sq atlas-status-sq-black" id="pcardStatusLeftBlack">P</span>
+          <span class="atlas-status-sq atlas-status-sq-black" id="pcardStatusRightBlack">P</span>
+          <span class="atlas-status-sq atlas-status-sq-red" id="pcardStatusRightRed">P</span>
+          <span class="atlas-status-sq atlas-status-sq-yellow" id="pcardStatusRightYellow">P</span>
+        </div>
+
+        <!-- Row 6: single button, gives both sides the next P-card at
+             once -- mutual passivity applies to both fencers together,
+             not just one side. Long-press undoes both. -->
+        <button id="btnUW2FBoth" class="atlas-btn atlas-btn-auto">UW2F</button>
+
+        <!-- Row 7: priority draw (Pcas) with a fixed red/green square per
+             side (matches the Repeater/OPP2 scoreboard's own
+             left=red/right=green lamp convention), only actually visible
+             (see .active in style.css) on whichever side currently has
+             priority -- both stay hidden when there's no priority yet. -->
         <div class="atlas-prio-row">
-          <span class="atlas-prio-indicator">&lt;</span>
-          <button class="atlas-btn atlas-wide" onclick="faveroAction('/FaveroPrioCas')">Priority</button>
-          <span class="atlas-prio-indicator">&gt;</span>
+          <span class="atlas-prio-sq atlas-prio-sq-left" id="prioIndicatorLeft">P</span>
+          <button class="atlas-btn atlas-btn-auto" onclick="faveroAction('/FaveroPrioCas')">PRIO</button>
+          <span class="atlas-prio-sq atlas-prio-sq-right" id="prioIndicatorRight">P</span>
         </div>
-        <p class="atlas-round" style="text-align:center;">Passivity timer: <span class="uw2fTimer">0:00</span></p>
-        <button class="atlas-btn atlas-wide" onclick="faveroAction('/Opp2RestoreUW2FTimer')">Undo Timer Reset</button>
+
+        <!-- Row 8 -->
+        <button class="atlas-btn atlas-btn-auto" onclick="faveroAction('/Opp2RestoreUW2FTimer')">Undo UWF Timer Reset</button>
 
         <div id="statusLineCompactPenalties" class="status-line"></div>
       </div>
@@ -263,6 +300,11 @@
 
   <section id="view-settings" class="view">
     <div class="panel">
+      <h3>Display</h3>
+      <div class="actionbar">
+        <button id="btnFullscreen" class="fullscreen-btn">Fullscreen</button>
+      </div>
+
       <h3>Remote Control</h3>
       <div class="form-row">
         <label for="remoteLayout">Remote layout</label>
@@ -317,12 +359,43 @@
     </div>
   </section>
 
-  <nav>
+  <!-- Hidden instead when the compact remote layout is active (see
+       renderRemoteLayout()) -- replaced by #bottomNav below, a single
+       linear swipe sequence that has no use for top-level nav links.
+       Classic layout keeps this exactly as before. -->
+  <nav id="topNav">
     <a href="#remote" data-view="remote">Remote</a>
     <a href="#repeater" data-view="repeater">Repeater</a>
     <a href="#opp2" data-view="opp2">OPP2</a>
     <a href="#settings" data-view="settings">Settings</a>
-    <button id="btnFullscreen" class="fullscreen-btn">Fullscreen</button>
+  </nav>
+
+  <!-- Compact-layout-only bottom navigation: a single linear sequence
+       (Repeater <-> OPP2 <-> Home <-> Penalties <-> Settings, trimmed to
+       Home <-> Penalties <-> Settings for an AP client -- see
+       compactAllowedSequence()) reachable only by moving one step at a
+       time, plus a center shortcut that always jumps straight to Home
+       (or, while already on Home, to Settings instead). display:none by
+       default, toggled to flex by renderRemoteLayout(); hidden in
+       fullscreen the same way #topNav already is, being a <nav> too (see
+       "body.is-fullscreen nav" in style.css) -- swipe still works with it
+       hidden. See applyCompactPosition()/updateCompactBottomNav(). -->
+  <nav id="bottomNav" class="bottom-nav">
+    <!-- Icons from /home/piet/SquareLine/assets (SquareLine UI kit), each
+         with a "-pressed" (highlighted) variant swapped in on press --
+         see bindIconPress() below. ASCII-only ONLY applies to visible
+         text/glyph characters (see that rule elsewhere in this project,
+         born from a real mojibake bug) -- binary image assets are
+         unaffected by it. -->
+    <button id="navLeft" class="bottom-nav-btn" aria-label="Previous">
+      <img id="navLeftIcon" src="icon-prev.png" alt="Previous">
+    </button>
+    <button id="navCenter" class="bottom-nav-btn bottom-nav-center" aria-label="Home">
+      <img id="navCenterIcon" src="icon-home.png" alt="Home">
+    </button>
+    <button id="navRight" class="bottom-nav-btn" aria-label="Next">
+      <img id="navRightIcon" src="icon-next.png" alt="Next">
+    </button>
   </nav>
 
   <script>
@@ -573,11 +646,16 @@
       { tapUrl: '/FaveroYellowLeft', longUrl: '/FaveroYellowLeft', longFeedbackMs: 150 });
     bindLongPress(document.getElementById('btnCompactYellowRight'),
       { tapUrl: '/FaveroYellowRight', longUrl: '/FaveroYellowRight', longFeedbackMs: 150 });
+    // Black card: local/OPP2 state only, no IR at all -- see main.cpp.
+    bindLongPress(document.getElementById('btnCompactBlackLeft'),
+      { tapUrl: '/Opp2BlackCardLeft', longUrl: '/Opp2UndoBlackCardLeft', longFeedbackMs: 200 });
+    bindLongPress(document.getElementById('btnCompactBlackRight'),
+      { tapUrl: '/Opp2BlackCardRight', longUrl: '/Opp2UndoBlackCardRight', longFeedbackMs: 200 });
     // UW2F P-card: local/OPP2 state only, no IR at all -- see main.cpp.
-    bindLongPress(document.getElementById('btnUW2FLeft'),
-      { tapUrl: '/Opp2UW2FCardLeft', longUrl: '/Opp2UndoUW2FCardLeft', longFeedbackMs: 200 });
-    bindLongPress(document.getElementById('btnUW2FRight'),
-      { tapUrl: '/Opp2UW2FCardRight', longUrl: '/Opp2UndoUW2FCardRight', longFeedbackMs: 200 });
+    // Single button, both sides at once (mutual passivity), unlike every
+    // other card control here.
+    bindLongPress(document.getElementById('btnUW2FBoth'),
+      { tapUrl: '/Opp2UW2FCardBoth', longUrl: '/Opp2UndoUW2FCardBoth', longFeedbackMs: 200 });
     // Reset: tap only warns (mirrors the Atlas remote this layout is
     // modeled on -- accidental taps shouldn't zero the match), long-press
     // fires the full automated sequence (Mise a zero -> cards/priority ->
@@ -593,9 +671,9 @@
       }
     });
 
-    // Sub-navigation between the compact layout's Main and Penalties
-    // screens -- swipe (mirroring the Atlas app's own gesture nav) and
-    // explicit buttons both, so it works without touch too.
+    // Sub-navigation within the compact layout's Remote view, between its
+    // Main (= "Home", see compactAllowedSequence() below) and Penalties
+    // screens.
     let compactSubView = 'main';
     function renderRemoteLayout() {
       const compact = activeRemoteLayout === 1;
@@ -604,24 +682,116 @@
         (compact && compactSubView === 'main') ? 'block' : 'none';
       document.getElementById('remoteCompactPenalties').style.display =
         (compact && compactSubView === 'penalties') ? 'block' : 'none';
+      // Compact gets the bottom swipe nav instead of the top nav bar;
+      // classic is untouched, keeping #topNav exactly as before. A body
+      // class, not direct .style.display -- an inline style would always
+      // beat the "body.is-fullscreen nav { display: none }" stylesheet
+      // rule regardless of specificity, permanently breaking fullscreen's
+      // nav-hiding for both bars the first time this ever ran. See the
+      // matching .compact-nav rules in style.css.
+      document.body.classList.toggle('compact-nav', compact);
+      updateCompactBottomNav();
     }
-    function showCompactSubView(name) {
-      compactSubView = name;
+
+    // ── Compact layout: linear 5-position swipe navigation ────────────────
+    // Replaces #topNav (Remote/Repeater/OPP2/Settings) for the compact
+    // layout only -- classic keeps the nav bar. Left-to-right order per
+    // explicit design: Repeater <-> OPP2 <-> Home <-> Penalties <->
+    // Settings, reachable only one step at a time (swipe, or the
+    // left/right icons below) -- trimmed to Home <-> Penalties <->
+    // Settings for an AP client, same availability rule #topNav's own
+    // AP_ALLOWED_VIEWS already enforces (showView() below still redirects
+    // defensively if this ever tried to show something unavailable).
+    // "Home" is #remoteCompactMain under the hood (view 'remote',
+    // sub-view 'main'); "Penalties" is 'remote' + sub-view 'penalties'.
+    function compactAllowedSequence() {
+      return IS_AP_CLIENT ? ['home', 'penalties', 'settings']
+                           : ['repeater', 'opp2', 'home', 'penalties', 'settings'];
+    }
+    let compactNavIndex = compactAllowedSequence().indexOf('home');
+
+    function applyCompactPosition() {
+      const name = compactAllowedSequence()[compactNavIndex];
+      if (name === 'home') {
+        showView('remote');
+        compactSubView = 'main';
+      } else if (name === 'penalties') {
+        showView('remote');
+        compactSubView = 'penalties';
+      } else {
+        showView(name); // 'repeater' | 'opp2' | 'settings'
+      }
       renderRemoteLayout();
     }
+    function showCompactPosition(name) {
+      const idx = compactAllowedSequence().indexOf(name);
+      if (idx === -1) return;
+      compactNavIndex = idx;
+      applyCompactPosition();
+    }
+    // No-op at either end of the sequence rather than wrapping -- matches
+    // "can only be reached sequentially", not a carousel.
+    function compactNavStep(delta) {
+      const seq = compactAllowedSequence();
+      const next = compactNavIndex + delta;
+      if (next < 0 || next >= seq.length) return;
+      compactNavIndex = next;
+      applyCompactPosition();
+    }
+    // Center icon: jumps straight to Home from anywhere (not a sequential
+    // step) -- except while already on Home, where it jumps to Settings
+    // instead, per explicit design ("we could replace it by the settings
+    // symbol"). navCenterBase tracks which of the two icons is currently
+    // showing there, independent of the transient pressed/unpressed state
+    // bindIconPress() below also drives on the same <img>.
+    let navCenterBase = 'icon-home';
+    function updateCompactBottomNav() {
+      const seq = compactAllowedSequence();
+      document.getElementById('navLeft').disabled = compactNavIndex <= 0;
+      document.getElementById('navRight').disabled = compactNavIndex >= seq.length - 1;
+      const atHome = seq[compactNavIndex] === 'home';
+      navCenterBase = atHome ? 'icon-settings-nav' : 'icon-home';
+      document.getElementById('navCenterIcon').src = navCenterBase + '.png';
+    }
+    document.getElementById('navLeft').addEventListener('click', function () { compactNavStep(-1); });
+    document.getElementById('navRight').addEventListener('click', function () { compactNavStep(1); });
+    document.getElementById('navCenter').addEventListener('click', function () {
+      const atHome = compactAllowedSequence()[compactNavIndex] === 'home';
+      showCompactPosition(atHome ? 'settings' : 'home');
+    });
+    // Visual press feedback using each icon's "-pressed" variant --
+    // getBase() is a function (not a fixed string) since the center
+    // icon's base changes at runtime (see navCenterBase above).
+    function bindIconPress(btn, imgEl, getBase) {
+      function press() { imgEl.src = getBase() + '-pressed.png'; }
+      function release() { imgEl.src = getBase() + '.png'; }
+      btn.addEventListener('pointerdown', press);
+      ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (evt) {
+        btn.addEventListener(evt, release);
+      });
+    }
+    bindIconPress(document.getElementById('navLeft'), document.getElementById('navLeftIcon'),
+      function () { return 'icon-prev'; });
+    bindIconPress(document.getElementById('navRight'), document.getElementById('navRightIcon'),
+      function () { return 'icon-next'; });
+    bindIconPress(document.getElementById('navCenter'), document.getElementById('navCenterIcon'),
+      function () { return navCenterBase; });
+
+    // Swipe gesture across the whole document (not just #view-remote as
+    // before) -- compact's sequence now spans Repeater/OPP2/Settings too,
+    // not just Main/Penalties within Remote.
     (function () {
-      const el = document.getElementById('view-remote');
       let startX = 0, startY = 0;
-      el.addEventListener('touchstart', function (e) {
+      document.body.addEventListener('touchstart', function (e) {
         startX = e.touches[0].clientX;
         startY = e.touches[0].clientY;
       }, { passive: true });
-      el.addEventListener('touchend', function (e) {
+      document.body.addEventListener('touchend', function (e) {
         if (activeRemoteLayout !== 1) return;
         const dx = e.changedTouches[0].clientX - startX;
         const dy = e.changedTouches[0].clientY - startY;
         if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy)) return;
-        showCompactSubView(dx < 0 ? 'penalties' : 'main');
+        compactNavStep(dx < 0 ? 1 : -1);
       }, { passive: true });
     })();
 
@@ -653,6 +823,31 @@
 
     function setText(cls, text) {
       document.querySelectorAll('.' + cls).forEach(function (el) { el.textContent = text; });
+    }
+
+    // Compact Penalties view, row 1 -- each of the three squares reflects
+    // its own independent card fact, not a "most severe wins" display.
+    // yellow_card in particular stays true here whenever a genuine yellow
+    // was given before a later red (Opp2StateOwner::updateFromFavero()
+    // already freezes it at whatever it was right before the first red
+    // card, precisely so this stays correct) -- red_card being true does
+    // NOT imply yellow should be hidden.
+    function setCardStatusTrio(idPrefix, side, yellow, red, black) {
+      const yellowEl = document.getElementById(idPrefix + side + 'Yellow');
+      const redEl    = document.getElementById(idPrefix + side + 'Red');
+      const blackEl  = document.getElementById(idPrefix + side + 'Black');
+      if (yellowEl) yellowEl.classList.toggle('lit', !!yellow);
+      if (redEl)    redEl.classList.toggle('lit', !!red);
+      if (blackEl)  blackEl.classList.toggle('lit', !!black);
+    }
+    // Row 5: the P-card ordinal (1-5, opp2_types.h) is a single
+    // progressing value, not three independent facts like row 1 -- so
+    // unlike row 1, this is deliberately cumulative: reaching the red
+    // bucket keeps yellow lit too, reaching black keeps both yellow and
+    // red lit. Bucket thresholds (1-2=yellow, 3-4=red, 5=black) are this
+    // UI's own choice, not a cited rulebook mapping.
+    function pCardBuckets(pCard) {
+      return { yellow: pCard >= 1, red: pCard >= 3, black: pCard >= 5 };
     }
 
     async function poll() {
@@ -693,12 +888,24 @@
         setText('leftCurrent', s.left.name ? (s.left.name + (s.left.noc ? ' (' + s.left.noc + ')' : '')) : '--');
         setText('rightCurrent', s.right.name ? (s.right.name + (s.right.noc ? ' (' + s.right.noc + ')' : '')) : '--');
 
-        // Compact-Penalties-only elements
-        setText('pcardLeft', s.left.p_card || 0);
-        setText('pcardRight', s.right.p_card || 0);
-        const uw2fMins = Math.floor(s.uw2f.time_ms / 60000);
-        const uw2fSecs = Math.floor((s.uw2f.time_ms % 60000) / 1000);
-        setText('uw2fTimer', uw2fMins + ':' + String(uw2fSecs).padStart(2, '0'));
+        // Compact-Penalties-only elements: rows 1/5's status squares (see
+        // setCardStatusTrio()/pCardBuckets() above) and row 7's priority
+        // indicator.
+        setCardStatusTrio('cardStatus', 'Left', s.left.yellow_card, s.left.red_card, s.left.black_card);
+        setCardStatusTrio('cardStatus', 'Right', s.right.yellow_card, s.right.red_card, s.right.black_card);
+        const pLeft = pCardBuckets(s.left.p_card);
+        const pRight = pCardBuckets(s.right.p_card);
+        setCardStatusTrio('pcardStatus', 'Left', pLeft.yellow, pLeft.red, pLeft.black);
+        setCardStatusTrio('pcardStatus', 'Right', pRight.yellow, pRight.red, pRight.black);
+        // Yellow can't be given once a side already has a red card -- the
+        // Favero's yellow LED bit becomes that red card's own side effect
+        // at that point (see main.cpp's /FaveroYellowLeft|Right guard).
+        // Disabling also blocks bindLongPress's pointerdown handler, so
+        // this covers both tap and long-press.
+        document.getElementById('btnCompactYellowLeft').disabled = !!s.left.red_card;
+        document.getElementById('btnCompactYellowRight').disabled = !!s.right.red_card;
+        document.getElementById('prioIndicatorLeft').classList.toggle('active', PRIORITY[s.priority] === '<');
+        document.getElementById('prioIndicatorRight').classList.toggle('active', PRIORITY[s.priority] === '>');
 
         // OPP2-only elements
         document.getElementById('timerWarning').style.display = s.clock.running ? 'block' : 'none';
