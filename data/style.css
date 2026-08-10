@@ -94,22 +94,57 @@ nav a.active {
    -- hidden entirely so the compact layout's Start/Stop can claim that
    space instead. Toggled by the fullscreenchange listener above, not a
    separate control. */
-body.is-fullscreen nav {
+/* :not(.bottom-nav) -- #bottomNav is the compact layout's ONLY
+   navigation (no top nav bar to fall back on, unlike classic), so unlike
+   #topNav it must stay reachable even in fullscreen. Originally hidden
+   here too on the assumption swipe would always cover navigation
+   instead; that assumption broke (swipe silently failed on
+   Repeater/OPP2/Settings, see the touchstart/touchend listener in
+   index.html) and left Android users in fullscreen with no way to
+   navigate at all, hence this being carved out explicitly rather than
+   fought over via specificity against the rule below. */
+body.is-fullscreen nav:not(.bottom-nav) {
   display: none;
 }
 
 /* Compact-layout-only bottom navigation (see applyCompactPosition() /
    updateCompactBottomNav() in index.html) -- #topNav (Remote/Repeater/
-   OPP2/Settings links) is unused here, #bottomNav takes over instead.
-   :not(.is-fullscreen) rather than relying on cascade/specificity against
-   "body.is-fullscreen nav" above -- baking the exclusion directly into
-   this selector is unambiguous regardless of class/rule ordering, unlike
-   trying to out-specificity-fight that rule. */
+   OPP2/Settings links) is unused here, #bottomNav takes over instead. */
 body.compact-nav #topNav {
   display: none;
 }
-body.compact-nav:not(.is-fullscreen) .bottom-nav {
+body.compact-nav .bottom-nav {
   display: flex;
+}
+/* pan-y, not none -- tells the browser this region handles horizontal
+   gestures itself (helps stop iOS Safari's system edge-swipe-back gesture
+   from competing with the swipe nav, see the touchmove handler in
+   index.html) while still leaving normal native vertical scrolling alone
+   for tall pages like Settings. Reinforces, doesn't replace, that JS --
+   this alone doesn't guarantee suppressing Safari's own gesture in every
+   iOS version. */
+body.compact-nav {
+  touch-action: pan-y;
+}
+/* Overrides the pan-y above (2 classes beats 1, so this wins regardless
+   of source order) once updateCompactScrollLock() in index.html confirms
+   the current page's content genuinely fits the viewport -- blocks native
+   vertical panning entirely, removing the rubber-band bounce that reads
+   as web-page-like rather than app-like. Toggled back off the moment a
+   page doesn't fit (e.g. Settings, or OPP2 once its on-screen keyboard
+   shrinks the visible area), so real scrolling still works wherever it's
+   actually needed. */
+body.compact-nav.no-vscroll {
+  touch-action: none;
+}
+/* Same idea, applied to <html> too (not gated on .compact-nav here since
+   index.html's updateCompactScrollLock() only ever adds this class in the
+   first place while compact layout is active). This project's own
+   html { display: inline-block } (top of this file) makes <html>, not
+   <body>, the actual root scrolling/bouncing box -- confirmed needed
+   after the body-only version alone didn't stop the bounce. */
+html.no-vscroll {
+  touch-action: none;
 }
 .bottom-nav {
   display: none;
@@ -135,18 +170,26 @@ body.compact-nav:not(.is-fullscreen) .bottom-nav {
      accurately on a real device. */
   background-color: transparent;
   border: none;
-  padding: 14px 10px;
+  /* Tightened from 14px 10px now that the icons themselves are roughly
+     double their original size (see .bottom-nav-btn img below) -- the
+     bigger icon already gives plenty of tap-target area on its own, so
+     the bar doesn't need to grow by the full doubled amount to still
+     feel comfortable to hit. */
+  padding: 10px 12px;
   cursor: pointer;
 }
-/* Native intrinsic sizing (each source PNG is a plain 40x40 square) does
-   the aspect-ratio job here, unlike the aspect-ratio CSS property used
-   elsewhere in this file (and confirmed unsupported on a real device) --
-   an <img> with only width set keeps its own ratio in every browser,
-   ancient or not, no CSS property required at all. */
+/* Native intrinsic sizing (each source PNG is a plain, now 160x160,
+   square) does the aspect-ratio job here, unlike the aspect-ratio CSS
+   property used elsewhere in this file (and confirmed unsupported on a
+   real device) -- an <img> with only width set keeps its own ratio in
+   every browser, ancient or not, no CSS property required at all.
+   Doubled from the original clamp(22px, 7vw, 32px) per explicit request;
+   the source PNGs were upscaled 4x (40px -> 160px) to stay crisp at this
+   size, including on high-DPI screens. */
 .bottom-nav-btn img {
   display: block;
-  width: 26px;
-  width: clamp(22px, 7vw, 32px);
+  width: 52px;
+  width: clamp(44px, 14vw, 64px);
   height: auto;
 }
 /* Margin instead of the flex `gap` property -- confirmed unsupported on
@@ -170,10 +213,11 @@ body.compact-nav:not(.is-fullscreen) .bottom-nav {
    row (e.g. Penalties' row 8, or Settings' own Save button) would sit
    partly hidden behind the bar. Covers every compact sub-page (.atlas-
    panel) and the Repeater/OPP2/Settings pages (.panel) alike, since the
-   bottom nav now spans all of them. */
+   bottom nav now spans all of them. Bumped from 72px to match the bar's
+   own now-larger max height (up to ~64px icon + 20px padding). */
 body.compact-nav .panel,
 body.compact-nav .atlas-panel {
-  padding-bottom: 72px;
+  padding-bottom: 96px;
 }
 
 .view {
@@ -350,10 +394,13 @@ section {
    without this fallback the whole min-height rule was silently dropped
    there, so the panel never stretched at all and Start/Stop just sized
    to its content); 100dvh second to override it where supported (better
-   accounts for mobile browser chrome). Exact fit only when <nav> is
-   hidden (fullscreen, see body.is-fullscreen above); with nav visible
-   there's a small unavoidable overhang since 100vh/100dvh + nav's own
-   height together exceed the viewport. */
+   accounts for mobile browser chrome). Exact fit only when nav is hidden
+   entirely -- true for #topNav in fullscreen (classic layout, see
+   body.is-fullscreen above), but #bottomNav (compact layout) now stays
+   visible even in fullscreen (see the :not(.bottom-nav) carve-out on that
+   same rule), so compact's Home screen always has this same small
+   unavoidable overhang, fullscreen or not, since 100vh/100dvh + the nav's
+   own height together exceed the viewport either way. */
 .atlas-panel-main {
   display: flex;
   flex-direction: column;

@@ -695,6 +695,138 @@ client choice) was resolved by comparing against that sibling project's
 docs alone. If something on this toolchain misbehaves, check there before
 spending long on first-principles debugging.
 
+## Mobile web / PWA gotchas — portable, not Favero-specific
+
+Everything below was hit building the compact remote layout and its swipe
+navigation, but none of it is actually about Favero or fencing — these are
+general mobile-web/PWA traps, kept here deliberately reusable for other
+projects (copy this section wholesale). Several took multiple real-device
+test rounds to pin down; the *actual* root cause was often not the first
+plausible theory, noted explicitly below where that happened.
+
+**`aspect-ratio` (CSS) is silently unsupported on at least one real
+device** (an old/small Android's stock WebView) — no error, the property
+is just dropped. An element sized only by `width` + `aspect-ratio` (no
+text content to imply a height) collapses to a thin stripe instead of a
+square. Fix: set `width` and `height` to the same value/formula
+explicitly (a plain duplicate declaration works fine as a fallback-then-
+override pair, same idiom as the `100vh`/`100dvh` pattern below), don't
+rely on `aspect-ratio` alone for anything that must render everywhere. An
+`<img>` with a real source image doesn't have this problem at all — it
+has intrinsic width/height from the file itself, so plain `width: Npx;
+height: auto` is safe and needs no `aspect-ratio` in the first place.
+
+**Flexbox `gap` is silently unsupported on the same class of device** —
+again, no error, just rendered as if `gap: 0`, which can look like "my
+CSS did nothing" rather than "unsupported." Fix: margin-based spacing
+instead (`.item + .item { margin-left: Npx }`), which has worked in every
+CSS-capable browser for decades.
+
+**`width: 101vw` (or any value ≥100vw) guarantees horizontal page
+overflow by construction** — `vw` doesn't account for a desktop
+scrollbar's width, so `100vw` can already be wider than the visible area,
+and anything above that is strictly worse. Use `width: 100%` instead of
+`100vw` for a full-bleed element; `100%` resolves against the containing
+block, which already excludes the scrollbar.
+
+**Missing `width=device-width` in the viewport `<meta>` tag** makes some
+engines lay out against a default/guessed width first, only correcting
+after a resize/zoom/orientation event forces a re-measure — reads as "the
+layout only settles into place after you touch the screen." Always
+include it (`<meta name="viewport" content="width=device-width, ...">`).
+
+**Setting `.style.display` from JS creates an inline style that beats
+*any* stylesheet rule, permanently** — including rules meant to override
+it conditionally later (e.g. a `body.is-fullscreen nav { display: none }`
+rule elsewhere). If a CSS rule anywhere needs to be able to win against
+an element's visibility, toggle a class from JS instead of setting
+`.style.display` directly; inline styles have no cascade, they just
+always win, so nothing else can ever override them again.
+
+**A non-default `html`/`body` sizing setup (e.g. `html { display:
+inline-block }`, used here for an old `margin: 0 auto` centering trick)
+can make `<body>` shrink-wrap to its own content height instead of always
+filling the viewport.** Two real consequences:
+  - A touch/gesture listener attached to `document.body` misses touches
+    that land in the leftover viewport space below short content — that
+    space belongs to `<html>`, which is body's *parent*, not a
+    descendant, so the event never bubbles through a body-attached
+    listener at all. Attach to `document` instead, which has no such gap.
+  - `touch-action` rules meant to control scroll/bounce need to target
+    `<html>`, not just `<body>` — in this setup `<html>` turned out to be
+    the actual root scrolling/bouncing box, and a body-only rule visibly
+    did nothing.
+  Both were genuinely surprising and cost a full extra test round each —
+  worth checking for this exact `html`/`body` display pattern early if
+  swipe/scroll behavior seems inexplicably inconsistent between pages.
+
+**A custom horizontal swipe gesture fights two native behaviors at
+once**: ordinary vertical scroll/rubber-band bounce, and — iOS Safari
+specifically — the system edge-swipe-back/forward gesture. Listening for
+only `touchstart`/`touchend` isn't enough; add a *non-passive*
+`touchmove` listener, decide horizontal-vs-vertical intent early (a small
+deadzone, e.g. 10px, avoids mis-judging an almost-diagonal start), and
+call `preventDefault()` only once the gesture is confirmed horizontal —
+a confirmed-vertical gesture should be handed back to the browser
+untouched so real scrolling on tall content still works. Reinforce with
+CSS `touch-action: pan-y` on the swipeable region (still allows native
+vertical scroll, blocks native horizontal panning/navigation). Be honest
+that this is the standard, documented fix, not a 100%-guaranteed one —
+Safari's system gesture has been known to still win in some iOS
+versions/contexts.
+
+**Blocking scroll entirely when content "fits" needs care about what
+you're actually measuring.** `document.documentElement.scrollHeight`
+includes *all* box-model contributions, including a `padding-bottom`
+reserved for a fixed-position overlay (e.g. a bottom nav bar) — that
+padding is not real content, but it counts toward `scrollHeight` exactly
+as if it were, silently breaking a naive "does this fit?" comparison
+against `clientHeight` (first pass here failed on literally every page,
+including one deliberately built to be exactly viewport-height). Locate
+the actual content container and subtract its own *live* computed
+`padding-bottom` (`getComputedStyle(el).paddingBottom`, not a hardcoded
+number that can drift out of sync with the CSS) before comparing.
+
+**iOS Safari's on-screen keyboard often does not resize the layout
+viewport** (`window.innerHeight` stays the same) — it only shrinks the
+*visual* viewport instead. Anything that depends on "how much space is
+actually visible right now" (e.g. re-checking whether a page still needs
+to scroll once a keyboard is open) must also listen to
+`window.visualViewport`'s own `resize` event, not just `window.resize`,
+or it'll stay wrong for the entire time the keyboard is up on iOS.
+
+**A long-press gesture races against iOS Safari's own text-selection
+callout** (Copy/Look Up/Translate menu) unless the element explicitly
+opts out: `-webkit-touch-callout: none`, `user-select: none` (+ `-moz-`/
+`-ms-` prefixes), and `touch-action: none` on that specific element.
+
+**A source PNG with its own baked-in card/shadow/padding** (typical of
+pre-2018 "legacy" Android launcher icons) reads as "an icon inside a
+badge" once *another* system (a Web App Manifest icon, `apple-touch-
+icon`, Android's adaptive-icon masking) applies its own rounding/mask on
+top — the fix isn't just cropping the transparent margin (tried first,
+didn't fully fix it), it's rebuilding as a genuinely full-bleed, flat,
+*opaque* image (no alpha channel at all — Apple explicitly discourages
+transparency on `apple-touch-icon`, and even a fully-opaque alpha channel
+can misrender on older iOS). If only the flattened composite is
+available (no separate foreground/background source layers), isolate the
+glyph by thresholding on whatever channel best distinguishes it from the
+card/shadow (e.g. "blue channel minus red channel" cleanly separated a
+navy glyph from an achromatic white card + gray shadow here) rather than
+trying to preserve the original background.
+
+**Real orientation lock has hard platform limits, not just quirks to
+work around**: `screen.orientation.lock()` requires the document to
+actually be in fullscreen on browsers that implement it at all, and
+WebKit/Safari has never implemented it under *any* circumstance —
+fullscreen, standalone/home-screen-installed, or otherwise. A Web App
+Manifest's `"orientation"` field is the real fix for Android (applies
+once added to the home screen, no fullscreen/button-press needed at
+all), but has no iOS equivalent whatsoever. A CSS `@media (orientation:
+landscape)` blocking overlay is the only fallback that actually works
+everywhere, iOS included — treat it as the primary mechanism for iOS, not
+a last resort.
+
 ## Known gaps / not yet done
 
 - GPIO13 has never been tested against a real physical Favero — the decoder
