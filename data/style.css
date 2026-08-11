@@ -679,6 +679,27 @@ section {
 .atlas-badge-red { background-color: #f44336; color: #000000; }
 .atlas-badge-black { background-color: #000000; color: #ffffff; border: 2px solid #888; }
 
+/* Extra breathing room around rows 1-6 above (real-card status, the Y/R/B
+   give buttons, P-card status, UW2F), on screens tall enough to spare it
+   -- same min-height:700px judgment call already used for .atlas-pm-mini
+   (an iPhone clears it, a very old/small Android doesn't; worth
+   revisiting with more real device data, not more assumption). Below
+   that threshold this page is already dense and correctly tuned --
+   untouched, deliberately. Above it, everything used to cluster in the
+   upper half of the screen with dead space above the nav bar; this
+   doesn't try to fill that space exactly, just spreads the three logical
+   groups (real-card status / give buttons / P-card status + UW2F) apart
+   from each other so the page reads as balanced rather than
+   cramped-then-empty. Only the boundary rows of the give-button group
+   get it (see atlas-give-row-first/-last in index.html) so the Y/R/B
+   rows stay exactly as tight relative to each other as they are on small
+   screens. */
+@media (min-height: 700px) {
+  .atlas-give-row-first { margin-top: 28px; }
+  .atlas-give-row-last { margin-bottom: 28px; }
+  #btnUW2FBoth { margin-top: 28px; }
+}
+
 /* Row 7: priority draw. The button is sized to its own text (see
    .atlas-btn-auto below) with the group centered as a whole via
    justify-content -- not flex:1, which stretched it to fill the row

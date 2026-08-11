@@ -146,8 +146,12 @@
              right side by side. Yellow/Red are the existing Favero-backed
              actions (tap gives, long-press re-toggles/undoes -- see
              bindLongPress calls below), unchanged. Black is new and
-             purely local -- no Favero IR command exists for it at all. -->
-        <div class="atlas-give-row">
+             purely local -- no Favero IR command exists for it at all.
+             atlas-give-row-first/-last mark the boundary rows of this
+             group of three, so extra breathing room on tall screens (see
+             style.css) can be added around the group as a whole without
+             also spreading out the Y/R/B rows relative to each other. -->
+        <div class="atlas-give-row atlas-give-row-first">
           <button id="btnCompactYellowLeft" class="atlas-btn atlas-give-btn atlas-badge-yellow">Y</button>
           <button id="btnCompactYellowRight" class="atlas-btn atlas-give-btn atlas-badge-yellow">Y</button>
         </div>
@@ -155,7 +159,7 @@
           <button id="btnCompactRedLeft" class="atlas-btn atlas-give-btn atlas-badge-red">R</button>
           <button id="btnCompactRedRight" class="atlas-btn atlas-give-btn atlas-badge-red">R</button>
         </div>
-        <div class="atlas-give-row">
+        <div class="atlas-give-row atlas-give-row-last">
           <button id="btnCompactBlackLeft" class="atlas-btn atlas-give-btn atlas-badge-black">B</button>
           <button id="btnCompactBlackRight" class="atlas-btn atlas-give-btn atlas-badge-black">B</button>
         </div>
