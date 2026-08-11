@@ -662,6 +662,7 @@ void Opp2StateOwner::writeStateJson(char* buf, size_t bufSize) const {
     right["score"] = m_state.score.right.score;
     right["yellow_card"] = m_state.score.right.yellow_card;
     right["red_card"] = m_state.score.right.red_cards > 0;
+    right["red_cards"] = m_state.score.right.red_cards;
     right["black_card"] = m_state.score.right.black_card;
     right["on_target"] = m_state.lights.right.on_target;
     right["white"] = m_state.lights.right.white;
@@ -673,6 +674,7 @@ void Opp2StateOwner::writeStateJson(char* buf, size_t bufSize) const {
     left["score"] = m_state.score.left.score;
     left["yellow_card"] = m_state.score.left.yellow_card;
     left["red_card"] = m_state.score.left.red_cards > 0;
+    left["red_cards"] = m_state.score.left.red_cards;
     left["black_card"] = m_state.score.left.black_card;
     left["on_target"] = m_state.lights.left.on_target;
     left["white"] = m_state.lights.left.white;

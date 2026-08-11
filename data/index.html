@@ -959,22 +959,32 @@
     // already freezes it at whatever it was right before the first red
     // card, precisely so this stays correct) -- red_card being true does
     // NOT imply yellow should be hidden.
-    function setCardStatusTrio(idPrefix, side, yellow, red, black) {
+    // redCount is optional -- only row 1 (real cards) has a persistent
+    // count to show (Opp2StateOwner::updateFromFavero(), see CLAUDE.md's
+    // "Red cards" section); row 5's P-card squares pass nothing and keep
+    // their static "P" label untouched.
+    function setCardStatusTrio(idPrefix, side, yellow, red, black, redCount) {
       const yellowEl = document.getElementById(idPrefix + side + 'Yellow');
       const redEl    = document.getElementById(idPrefix + side + 'Red');
       const blackEl  = document.getElementById(idPrefix + side + 'Black');
       if (yellowEl) yellowEl.classList.toggle('lit', !!yellow);
-      if (redEl)    redEl.classList.toggle('lit', !!red);
+      if (redEl) {
+        redEl.classList.toggle('lit', !!red);
+        if (redCount !== undefined) redEl.textContent = redCount > 0 ? redCount : '';
+      }
       if (blackEl)  blackEl.classList.toggle('lit', !!black);
     }
     // Row 5: the P-card ordinal (1-5, opp2_types.h) is a single
     // progressing value, not three independent facts like row 1 -- so
     // unlike row 1, this is deliberately cumulative: reaching the red
     // bucket keeps yellow lit too, reaching black keeps both yellow and
-    // red lit. Bucket thresholds (1-2=yellow, 3-4=red, 5=black) are this
-    // UI's own choice, not a cited rulebook mapping.
+    // red lit. Bucket thresholds (1=yellow, 2=red, 3=black) so every
+    // button press escalates the shown color by one step -- an earlier
+    // 1-2/3-4/5 spacing (confirmed wrong 2026-08-11) made every other
+    // press produce no visible change at all. Ordinal values 4-5 are
+    // still reachable (cap unchanged) and simply stay shown as black.
     function pCardBuckets(pCard) {
-      return { yellow: pCard >= 1, red: pCard >= 3, black: pCard >= 5 };
+      return { yellow: pCard >= 1, red: pCard >= 2, black: pCard >= 3 };
     }
 
     async function poll() {
@@ -1018,8 +1028,8 @@
         // Compact-Penalties-only elements: rows 1/5's status squares (see
         // setCardStatusTrio()/pCardBuckets() above) and row 7's priority
         // indicator.
-        setCardStatusTrio('cardStatus', 'Left', s.left.yellow_card, s.left.red_card, s.left.black_card);
-        setCardStatusTrio('cardStatus', 'Right', s.right.yellow_card, s.right.red_card, s.right.black_card);
+        setCardStatusTrio('cardStatus', 'Left', s.left.yellow_card, s.left.red_card, s.left.black_card, s.left.red_cards);
+        setCardStatusTrio('cardStatus', 'Right', s.right.yellow_card, s.right.red_card, s.right.black_card, s.right.red_cards);
         const pLeft = pCardBuckets(s.left.p_card);
         const pRight = pCardBuckets(s.right.p_card);
         setCardStatusTrio('pcardStatus', 'Left', pLeft.yellow, pLeft.red, pLeft.black);

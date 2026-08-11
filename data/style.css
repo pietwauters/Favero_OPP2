@@ -65,6 +65,15 @@ nav {
   padding: 10px;
   background-color: #111;
 }
+/* Bottom nav (compact layout) needs far less vertical padding than the
+   classic top nav -- its own icon already carries a big built-in tap
+   target via .bottom-nav-btn's padding, so the bar's own top/bottom
+   padding was pure extra margin above/below the icons. Horizontal
+   unchanged. */
+.bottom-nav {
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
 nav a {
   color: white;
   text-decoration: none;
@@ -170,12 +179,12 @@ html.no-vscroll {
      accurately on a real device. */
   background-color: transparent;
   border: none;
-  /* Tightened from 14px 10px now that the icons themselves are roughly
-     double their original size (see .bottom-nav-btn img below) -- the
-     bigger icon already gives plenty of tap-target area on its own, so
-     the bar doesn't need to grow by the full doubled amount to still
-     feel comfortable to hit. */
-  padding: 10px 12px;
+  /* Tightened from 14px 10px, then again from 10px 12px -- the icons
+     themselves (see .bottom-nav-btn img below) are large enough to be a
+     comfortable tap target on their own, so vertical padding is kept
+     minimal; horizontal padding stays larger to keep icons from crowding
+     each other. */
+  padding: 4px 12px;
   cursor: pointer;
 }
 /* Native intrinsic sizing (each source PNG is a plain, now 160x160,
@@ -213,11 +222,12 @@ html.no-vscroll {
    row (e.g. Penalties' row 8, or Settings' own Save button) would sit
    partly hidden behind the bar. Covers every compact sub-page (.atlas-
    panel) and the Repeater/OPP2/Settings pages (.panel) alike, since the
-   bottom nav now spans all of them. Bumped from 72px to match the bar's
-   own now-larger max height (up to ~64px icon + 20px padding). */
+   bottom nav now spans all of them. Matches the bar's own max height
+   (up to ~64px icon + 4px nav padding + 8px button padding, each top/
+   bottom -- trimmed down from the earlier, much larger vertical padding). */
 body.compact-nav .panel,
 body.compact-nav .atlas-panel {
-  padding-bottom: 96px;
+  padding-bottom: 84px;
 }
 
 .view {
