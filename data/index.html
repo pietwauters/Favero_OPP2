@@ -304,6 +304,10 @@
       <div class="actionbar">
         <button id="btnFullscreen" class="fullscreen-btn">Fullscreen</button>
       </div>
+      <div class="form-row" id="autoFullscreenRow">
+        <label for="autoFullscreenCheck">Enter fullscreen automatically</label>
+        <input id="autoFullscreenCheck" type="checkbox" checked>
+      </div>
 
       <h3>Remote Control</h3>
       <div class="form-row">
@@ -486,21 +490,96 @@
                document.mozFullScreenElement || document.msFullscreenElement;
       }
 
+      const autoRow = document.getElementById('autoFullscreenRow');
+      const autoCheck = document.getElementById('autoFullscreenCheck');
+
       if (!requestFn(docEl)) {
         btn.style.display = 'none';
+        if (autoRow) autoRow.style.display = 'none';
         return;
       }
 
-      btn.addEventListener('click', function () {
+      // ── Auto-fullscreen on first user gesture ──────────────────────────
+      // requestFullscreen() must be called synchronously from within a
+      // real user-gesture event handler -- calling it unprompted on page
+      // load is rejected everywhere. Rather than making the referee find
+      // and tap the Fullscreen button themselves, the very first press
+      // anywhere on the page (any button, any tap) is used as that
+      // required gesture. Capture phase + a single document-level listener
+      // so it fires regardless of which element the press actually lands
+      // on and whether that element's own handler stops propagation.
+      // once:true means this only ever fires once per page load -- if the
+      // attempt fails (e.g. iOS Safari with the fullscreen flag off) or
+      // the referee later exits fullscreen on purpose, nothing re-prompts
+      // them on every subsequent press.
+      //
+      // Deliberately 'click', not 'pointerdown' -- confirmed by real-device
+      // testing (2026-08-11) that they are NOT equivalent here: pointerdown
+      // fires while the tap is still provisional (could still become a
+      // scroll/edge-swipe), and at least one real mobile browser only
+      // grants the *lesser* of the two fullscreen levels it supports for
+      // that -- address bar hidden, but OS status bar (clock/wifi/battery)
+      // left showing. 'click' only fires once a tap is fully committed,
+      // matching the btnFullscreen listener below exactly, which was
+      // already confirmed to get the fuller, real immersive result.
+      //
+      // requestFullscreenOnce() below exists because of a real race found
+      // testing this: when the very first click of the session lands on
+      // btn itself, this document-capture listener AND btn's own
+      // bubble-phase click listener both fire for that SAME click. Both
+      // used to guard on currentFsElement() -- but that reflects the
+      // fullscreen transition, which is asynchronous, so at click time it
+      // was still false/null for both handlers, and both went ahead and
+      // called requestFullscreen(). Two overlapping requests in one task
+      // is exactly the kind of race that produced the intermittent,
+      // partially-immersive result (address bar hidden, OS status bar
+      // not) -- and once that half-entered state lands, currentFsElement()
+      // reports true, so every later press just tried to exit() a state
+      // that was never cleanly entered, matching "nothing I do changes
+      // it". Fixed with a synchronous in-flight flag instead of relying
+      // on currentFsElement() to gate re-entry -- shared by both call
+      // sites, so at most one requestFullscreen() is ever in flight no
+      // matter which handler(s) see a given click.
+      const AUTO_FS_KEY = 'autoFullscreen';
+      let fsRequestPending = false;
+      function requestFullscreenOnce() {
+        if (fsRequestPending || currentFsElement()) return;
+        fsRequestPending = true;
         try {
-          if (currentFsElement()) {
-            exitFn().call(document);
-          } else {
-            requestFn(docEl).call(docEl);
-          }
+          const p = requestFn(docEl).call(docEl);
+          if (p && typeof p.catch === 'function') p.catch(function () { fsRequestPending = false; });
         } catch (e) {
-          // Nothing more to do -- some engines reject/throw here (e.g.
-          // iOS Safari with the flag above left off).
+          fsRequestPending = false;
+        }
+      }
+      function tryAutoFullscreen() {
+        requestFullscreenOnce();
+      }
+      function armAutoFullscreen() {
+        document.removeEventListener('click', tryAutoFullscreen, true);
+        document.addEventListener('click', tryAutoFullscreen, { capture: true, once: true });
+      }
+      function disarmAutoFullscreen() {
+        document.removeEventListener('click', tryAutoFullscreen, true);
+      }
+
+      if (autoCheck) {
+        autoCheck.checked = localStorage.getItem(AUTO_FS_KEY) !== '0';
+        if (autoCheck.checked) armAutoFullscreen();
+        autoCheck.addEventListener('change', function () {
+          localStorage.setItem(AUTO_FS_KEY, autoCheck.checked ? '1' : '0');
+          if (autoCheck.checked) armAutoFullscreen();
+          else disarmAutoFullscreen();
+        });
+      }
+
+      btn.addEventListener('click', function () {
+        if (currentFsElement()) {
+          try { exitFn().call(document); } catch (e) {
+            // Nothing more to do -- some engines reject/throw here.
+          }
+        } else {
+          requestFullscreenOnce();
         }
       });
 
@@ -532,11 +611,21 @@
       ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange']
         .forEach(function (evt) {
           document.addEventListener(evt, function () {
+            fsRequestPending = false;
             const inFullscreen = !!currentFsElement();
             btn.textContent = inFullscreen ? 'Exit fullscreen' : 'Fullscreen';
             document.body.classList.toggle('is-fullscreen', inFullscreen);
             syncOrientationLock(inFullscreen);
           });
+        });
+      // Clears the same in-flight flag on a failed request -- covers the
+      // older, promise-less requestFullscreen() variants (the .catch()
+      // in requestFullscreenOnce() only ever applies to the modern,
+      // promise-returning form), so a rejected/refused request there
+      // doesn't leave fsRequestPending stuck true forever.
+      ['fullscreenerror', 'webkitfullscreenerror', 'mozfullscreenerror', 'MSFullscreenError']
+        .forEach(function (evt) {
+          document.addEventListener(evt, function () { fsRequestPending = false; });
         });
     })();
 
