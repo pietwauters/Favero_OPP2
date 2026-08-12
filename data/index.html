@@ -15,6 +15,38 @@
 </head>
 <body>
 
+  <!-- Bottom-nav glyphs, inline as an SVG sprite instead of 8 separate PNGs
+       (4 icons x normal/pressed) -- replaces ~72KB of raster art with a few
+       hundred bytes of path data, and the "pressed" variant no longer needs
+       a second image at all: it was always the same glyph over a translucent
+       navy circle (sampled from the original PNGs: solid #17375E glyph, plus
+       #17375E at ~23% alpha for the circle) -- now just a CSS class toggle
+       on .icon-glyph (see bindIconPress() below) instead of an <img> src
+       swap. display:none + aria-hidden -- this block draws nothing itself,
+       each icon is instantiated via <use> where needed. -->
+  <svg style="display:none" aria-hidden="true">
+    <symbol id="icon-prev" viewBox="0 0 24 24">
+      <path d="M16 5 L6 12 L16 19 Z" fill="#17375E" stroke="#17375E" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="icon-next" viewBox="0 0 24 24">
+      <path d="M8 5 L18 12 L8 19 Z" fill="#17375E" stroke="#17375E" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="icon-home" viewBox="0 0 24 24">
+      <path d="M12 4 L20 12 L15.5 12 L15.5 20 L8.5 20 L8.5 12 L4 12 Z" fill="#17375E" stroke="#17375E" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="icon-settings-nav" viewBox="0 0 24 24">
+      <!-- Single path, fill-rule=evenodd -- the center hole is genuinely
+           transparent (the gear outline subpath plus the circle subpath
+           overlap, which evenodd punches out), not a white disc painted on
+           top. A separate white <circle> looked fine only against a white
+           page background; on this project's dark theme it read as a
+           prominent white dot instead of a hole. -->
+      <path fill-rule="evenodd" fill="#17375E" stroke="#17375E" stroke-width="1.8" stroke-linejoin="round"
+            d="M 8.74,2.54 L 15.26,2.54 L 15.60,5.76 L 18.56,4.45 L 21.82,10.09 L 19.20,12.00 L 21.82,13.91 L 18.56,19.55 L 15.60,18.24 L 15.26,21.46 L 8.74,21.46 L 8.40,18.24 L 5.44,19.55 L 2.18,13.91 L 4.80,12.00 L 2.18,10.09 L 5.44,4.45 L 8.40,5.76 Z
+               M 8.4,12 A 3.6,3.6 0 1 1 15.6,12 A 3.6,3.6 0 1 1 8.4,12 Z"/>
+    </symbol>
+  </svg>
+
   <!-- Shown only via the @media (orientation: landscape) rule in style.css
        -- catches every case the Android-only locking above can't: iOS
        always (WebKit never implemented orientation lock at all, see the
@@ -389,20 +421,20 @@
        "body.is-fullscreen nav" in style.css) -- swipe still works with it
        hidden. See applyCompactPosition()/updateCompactBottomNav(). -->
   <nav id="bottomNav" class="bottom-nav">
-    <!-- Icons from /home/piet/SquareLine/assets (SquareLine UI kit), each
-         with a "-pressed" (highlighted) variant swapped in on press --
-         see bindIconPress() below. ASCII-only ONLY applies to visible
-         text/glyph characters (see that rule elsewhere in this project,
-         born from a real mojibake bug) -- binary image assets are
-         unaffected by it. -->
+    <!-- Icons are inline SVG <use> references into the sprite defined at
+         the top of <body> (see the comment there) -- replaced the original
+         PNGs from /home/piet/SquareLine/assets (8 files, ~72KB) with ~1KB
+         of vector path data. Press feedback (see bindIconPress() below) now
+         toggles a .pressed class on .icon-glyph (a translucent navy circle)
+         instead of swapping to a second "-pressed" image. -->
     <button id="navLeft" class="bottom-nav-btn" aria-label="Previous">
-      <img id="navLeftIcon" src="icon-prev.png" alt="Previous">
+      <span class="icon-glyph"><svg class="icon" viewBox="0 0 24 24"><use href="#icon-prev" xlink:href="#icon-prev"/></svg></span>
     </button>
     <button id="navCenter" class="bottom-nav-btn bottom-nav-center" aria-label="Home">
-      <img id="navCenterIcon" src="icon-home.png" alt="Home">
+      <span class="icon-glyph"><svg class="icon" viewBox="0 0 24 24"><use id="navCenterUse" href="#icon-home" xlink:href="#icon-home"/></svg></span>
     </button>
     <button id="navRight" class="bottom-nav-btn" aria-label="Next">
-      <img id="navRightIcon" src="icon-next.png" alt="Next">
+      <span class="icon-glyph"><svg class="icon" viewBox="0 0 24 24"><use href="#icon-next" xlink:href="#icon-next"/></svg></span>
     </button>
   </nav>
 
@@ -909,9 +941,8 @@
     // Center icon: jumps straight to Home from anywhere (not a sequential
     // step) -- except while already on Home, where it jumps to Settings
     // instead, per explicit design ("we could replace it by the settings
-    // symbol"). navCenterBase tracks which of the two icons is currently
-    // showing there, independent of the transient pressed/unpressed state
-    // bindIconPress() below also drives on the same <img>.
+    // symbol"). navCenterBase tracks which sprite symbol #navCenterUse
+    // currently points at (see the SVG sprite at the top of <body>).
     let navCenterBase = 'icon-home';
     function updateCompactBottomNav() {
       const seq = compactAllowedSequence();
@@ -919,7 +950,9 @@
       document.getElementById('navRight').disabled = compactNavIndex >= seq.length - 1;
       const atHome = seq[compactNavIndex] === 'home';
       navCenterBase = atHome ? 'icon-settings-nav' : 'icon-home';
-      document.getElementById('navCenterIcon').src = navCenterBase + '.png';
+      const use = document.getElementById('navCenterUse');
+      use.setAttribute('href', '#' + navCenterBase);
+      use.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', '#' + navCenterBase);
     }
     document.getElementById('navLeft').addEventListener('click', function () { compactNavStep(-1); });
     document.getElementById('navRight').addEventListener('click', function () { compactNavStep(1); });
@@ -927,23 +960,24 @@
       const atHome = compactAllowedSequence()[compactNavIndex] === 'home';
       showCompactPosition(atHome ? 'settings' : 'home');
     });
-    // Visual press feedback using each icon's "-pressed" variant --
-    // getBase() is a function (not a fixed string) since the center
-    // icon's base changes at runtime (see navCenterBase above).
-    function bindIconPress(btn, imgEl, getBase) {
-      function press() { imgEl.src = getBase() + '-pressed.png'; }
-      function release() { imgEl.src = getBase() + '.png'; }
+    // Visual press feedback: toggles .pressed on the button's own
+    // .icon-glyph wrapper (a translucent navy circle, see style.css) rather
+    // than swapping to a second "-pressed" image -- there's only one glyph
+    // per icon now, sampling the original PNGs showed the "pressed" art was
+    // always just the same glyph over a ~23%-alpha navy circle, so that's
+    // reproducible in CSS alone.
+    function bindIconPress(btn) {
+      const glyph = btn.querySelector('.icon-glyph');
+      function press() { glyph.classList.add('pressed'); }
+      function release() { glyph.classList.remove('pressed'); }
       btn.addEventListener('pointerdown', press);
       ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (evt) {
         btn.addEventListener(evt, release);
       });
     }
-    bindIconPress(document.getElementById('navLeft'), document.getElementById('navLeftIcon'),
-      function () { return 'icon-prev'; });
-    bindIconPress(document.getElementById('navRight'), document.getElementById('navRightIcon'),
-      function () { return 'icon-next'; });
-    bindIconPress(document.getElementById('navCenter'), document.getElementById('navCenterIcon'),
-      function () { return navCenterBase; });
+    bindIconPress(document.getElementById('navLeft'));
+    bindIconPress(document.getElementById('navRight'));
+    bindIconPress(document.getElementById('navCenter'));
 
     // Swipe gesture across the whole document (not just #view-remote as
     // before) -- compact's sequence now spans Repeater/OPP2/Settings too,

@@ -187,19 +187,37 @@ html.no-vscroll {
   padding: 4px 12px;
   cursor: pointer;
 }
-/* Native intrinsic sizing (each source PNG is a plain, now 160x160,
-   square) does the aspect-ratio job here, unlike the aspect-ratio CSS
-   property used elsewhere in this file (and confirmed unsupported on a
-   real device) -- an <img> with only width set keeps its own ratio in
-   every browser, ancient or not, no CSS property required at all.
-   Doubled from the original clamp(22px, 7vw, 32px) per explicit request;
-   the source PNGs were upscaled 4x (40px -> 160px) to stay crisp at this
-   size, including on high-DPI screens. */
-.bottom-nav-btn img {
-  display: block;
+/* Icons are inline SVG now (see the sprite at the top of <body>), not
+   raster PNGs -- vector art has no intrinsic-size/DPI concern at all
+   (unlike the old <img>, which relied on a pre-upscaled 160px source to
+   stay crisp on high-DPI screens), so sizing is plain CSS on the wrapping
+   circle. .icon-glyph is the tap-target-sized circle (also the "pressed"
+   state's translucent-navy background, see .icon-glyph.pressed below);
+   .icon fills a fixed fraction of it so the glyph itself doesn't touch the
+   circle's edge, matching the original art's own padding. Same
+   clamp(44px, 14vw, 64px) sizing as before (kept doubled from the original
+   clamp(22px, 7vw, 32px) per that same explicit request). */
+.bottom-nav-btn .icon-glyph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 52px;
   width: clamp(44px, 14vw, 64px);
-  height: auto;
+  height: 52px;
+  height: clamp(44px, 14vw, 64px);
+  border-radius: 50%;
+  background-color: transparent;
+}
+/* Sampled from the original "-pressed" PNGs: same #17375E glyph color,
+   ~23% alpha (60/255) circle behind it -- reproduced here instead of
+   shipping a second image per icon. */
+.bottom-nav-btn .icon-glyph.pressed {
+  background-color: rgba(23, 55, 94, 0.23);
+}
+.bottom-nav-btn .icon {
+  display: block;
+  width: 72%;
+  height: 72%;
 }
 /* Margin instead of the flex `gap` property -- confirmed unsupported on
    at least one real device tested against this project (silently ignored
